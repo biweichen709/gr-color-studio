@@ -20,6 +20,7 @@
 | LUT | 导出 33 / 65 精度 `.cube`，可导入自定义 `.cube` |
 | 写入相机（实验） | GR IV 机内色彩表的备份、替换与恢复向导，见 [docs/camera-workflow.md](docs/camera-workflow.md) |
 | 固件分析 | 解包官方固件，按可能性列出候选资源文件，并检测固件内嵌的色彩表 |
+| 工厂菜单入口 | 从固件推定并写入入口文件；未知机型用 1000 候选法（GR III 实测见下） |
 
 ## 预设
 
@@ -39,5 +40,7 @@ python -m unittest discover -s tests -t .
 ```
 
 推送到 `main` 后，GitHub Actions 会在 Windows 上运行测试、构建并自检 exe，然后发布到 Releases。
+
+**GR III 调查结论**：GR III v2.10 的工厂菜单可进入（机型编号 78350 + 候选法，已实测），但其色彩风格参数化写死在固件中、没有可替换的色彩表文件，机内替换色彩不可行；详见 [docs/gr3-factory-and-color.md](docs/gr3-factory-and-color.md)。GR III 请在电脑端用本工具处理照片。
 
 固件容器格式参考 [yeahnope/gr_unpack](https://github.com/yeahnope/gr_unpack) 的公开说明；相机脚本流程参考 [radium-wang/ricoh-gr4-firmware-analysis-and-feature-expansion](https://github.com/radium-wang/ricoh-gr4-firmware-analysis-and-feature-expansion) 的实机研究。

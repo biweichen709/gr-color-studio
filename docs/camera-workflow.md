@@ -1,5 +1,8 @@
 # 写入相机：机内色彩表替换流程（实验）
 
+> 另见：[GR III v2.10 工厂菜单与色彩调查记录](gr3-factory-and-color.md)——GR III 可进工厂菜单，但无可替换的色彩表文件。
+
+
 把自己的胶片预设"倒映射"到理光机内色彩表的同一组网格坐标上，替换机内的某个影像风格，并且**随时能恢复原样**。
 
 建立在 [radium-wang/ricoh-gr4-firmware-analysis-and-feature-expansion](https://github.com/radium-wang/ricoh-gr4-firmware-analysis-and-feature-expansion) 的 GR IV 研究之上：工厂菜单入口、`Script` 启动脚本、`A:` 资源盘可写、`filecopy` 不截断等结论都来自该项目的实机记录。本仓库代码为独立实现，未复制其文件。
