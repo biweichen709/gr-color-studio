@@ -1,0 +1,4 @@
+numpy>=1.24
+Pillow>=10
+rawpy>=0.19
+pyinstaller>=6.3

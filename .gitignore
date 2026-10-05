@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+# Firmware, decoded payloads and camera readbacks must never be committed.
+*.bin
+*.BIN
+archive*/
+stage*/
+build/
+dist/
+release/

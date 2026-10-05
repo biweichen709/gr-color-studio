@@ -1,0 +1,82 @@
+"""Put a staged workflow onto an SD card without destroying anything already there.
+
+Anything in the way (a user's own startup script, outputs of an earlier run
+that would make the camera skip a step, a differing file of the same name) is
+moved into RC_OLD/<timestamp>/ on the card instead of being overwritten.
+"""
+
+import datetime
+import json
+import os
+import shutil
+from pathlib import Path
+
+from . import safety
+
+
+def _timestamp():
+    return datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+
+
+def filesystem(root):
+    """Filesystem name of the volume holding root (Windows only), else None."""
+    if os.name != "nt":
+        return None
+    import ctypes
+
+    drive = os.path.splitdrive(os.path.abspath(root))[0] + "\\"
+    name = ctypes.create_unicode_buffer(64)
+    ok = ctypes.windll.kernel32.GetVolumeInformationW(
+        ctypes.c_wchar_p(drive), None, 0, None, None, None, name, len(name)
+    )
+    return name.value if ok else None
+
+
+def has_backup_run(card):
+    return (Path(card) / safety.RUN_MARK).exists()
+
+
+def _stale_names(plan):
+    if plan["kind"] == "backup":
+        names = [safety.RUN_MARK, safety.END_MARK]
+        for e in plan["entries"]:
+            names += [e["copy"], e["status"]]
+        return names
+    return [e["readback"] for e in plan["entries"]]
+
+
+def _move_aside(path, card, stamp, moved):
+    target = card / "RC_OLD" / stamp / path.relative_to(card)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(path), str(target))
+    moved.append(str(target.relative_to(card)))
+
+
+def stage_to_card(stage, card, stamp=None):
+    """Copy stage/card/* onto the card root; return the card paths moved aside."""
+    stage, card = Path(stage), Path(card)
+    plan = json.loads((stage / "plan.json").read_text())
+    stamp = stamp or _timestamp()
+    moved = []
+    for name in _stale_names(plan):
+        if (card / name).exists():
+            _move_aside(card / name, card, stamp, moved)
+    source_root = stage / "card"
+    for src in sorted(p for p in source_root.rglob("*") if p.is_file()):
+        dst = card / src.relative_to(source_root)
+        if dst.exists() and dst.read_bytes() != src.read_bytes():
+            _move_aside(dst, card, stamp, moved)
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(src, dst)
+    return moved
+
+
+def finish(card, stamp=None):
+    """Move the active startup script aside so the camera stops running it."""
+    card = Path(card)
+    script = card / "script" / "startup.ttl"
+    if not script.exists():
+        return None
+    moved = []
+    _move_aside(script, card, stamp or _timestamp(), moved)
+    return moved[0]
