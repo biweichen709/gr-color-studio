@@ -5,7 +5,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import codec, color, fit, lut, remap, safety, scan
+from . import codec, color, firmware, fit, lut, remap, safety, scan
 
 
 def _print_json(data):
@@ -165,6 +165,19 @@ def cmd_verify_readback(args):
     _report(result, {"PASS"})
 
 
+def cmd_firmware_paths(args):
+    data = Path(args.file).read_bytes()
+    payload = firmware.unpack(data) if firmware.is_container(data) else data
+    found = firmware.candidate_paths(payload)
+    for f in found["files"]:
+        print(f"{f['score']:3d}  {f['path']}  {','.join(f['hints'])}")
+    for p in found["patterns"]:
+        print(f"pattern  {p}")
+    if args.output:
+        Path(args.output).write_text("\n".join(f["path"] for f in found["files"]) + "\n", encoding="utf-8")
+        print(f"wrote {len(found['files'])} paths to {args.output}")
+
+
 def build_parser():
     p = argparse.ArgumentParser(prog="ricoh_color", description=__doc__)
     sub = p.add_subparsers(dest="command", required=True)
@@ -228,6 +241,11 @@ def build_parser():
     s.add_argument("image")
     s.add_argument("output")
     s.set_defaults(func=cmd_hald_to_cube)
+
+    s = sub.add_parser("firmware-paths", help="list camera file paths referenced by a firmware file, ranked")
+    s.add_argument("file", help="official firmware (e.g. fwdc248b.bin) or a decoded payload")
+    s.add_argument("-o", "--output", help="write the paths, one per line, for backup-plan")
+    s.set_defaults(func=cmd_firmware_paths)
 
     s = sub.add_parser("backup-plan", help="stage a read-only backup script for camera paths")
     s.add_argument("paths", help="text file, one camera path per line (A:\\..., E:\\...)")

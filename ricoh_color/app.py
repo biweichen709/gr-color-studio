@@ -10,7 +10,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import card, codec, looks, lut, photo, remap, safety, scan
+from . import card, codec, firmware, looks, lut, photo, remap, safety, scan
 
 APP_NAME = "GR 色彩工坊"
 CHECKER = [
@@ -409,7 +409,7 @@ def run_gui():
                            "写入后：取出 SD 卡 → 插入相机 → 正常开机一次并等待约 10 秒 → 关机 → 卡插回电脑 → 点「校验备份」。")
             self.paths = tk.Text(f, height=4, width=80)
             self.paths.grid(row=1, column=0, columnspan=4, sticky="ew", pady=4)
-            self._buttons(f, 2, [("生成备份脚本并写入 SD 卡", self.write_backup), ("校验备份并归档", self.verify_backup)])
+            self._buttons(f, 2, [("从官方固件提取候选路径…", self.paths_from_firmware), ("生成备份脚本并写入 SD 卡", self.write_backup), ("校验备份并归档", self.verify_backup)])
 
             f = self._step(3, "2. 定位色彩表",
                            "扫描已归档的原件，列出疑似 3D 色彩表。选中一行后分别设为「基准表」（例如 Standard）"
@@ -521,6 +521,33 @@ def run_gui():
                 self.say(f"  {e['target']}：{verdict}")
             return bad
 
+
+        def paths_from_firmware(self):
+            path = filedialog.askopenfilename(title="选择官方固件（例如 fwdc248b.bin）", filetypes=[("固件", "*.bin *.BIN"), ("所有文件", "*.*")])
+            if not path:
+                return
+
+            def work():
+                data = Path(path).read_bytes()
+                payload = firmware.unpack(data) if firmware.is_container(data) else data
+                found = firmware.candidate_paths(payload)
+                found["embedded"] = len(scan.find_luts(payload))
+                found["size"] = len(payload)
+                return found
+
+            def done(found):
+                files = [f["path"] for f in found["files"]][: safety.MAX_ENTRIES]
+                (self.ws() / "firmware-paths.json").write_text(json.dumps(found, indent=2, ensure_ascii=False), encoding="utf-8")
+                self.paths.delete("1.0", "end")
+                self.paths.insert("1.0", "\n".join(files))
+                self.say(f"固件解包 {found['size']:,} 字节：找到 {len(found['files'])} 个可备份路径，已按可能性排序填入。")
+                for f in found["files"][:15]:
+                    self.say(f"  {f['path']}  " + (f"（线索：{'、'.join(f['hints'])}）" if f["hints"] else ""))
+                if found["patterns"]:
+                    self.say(f"另有 {len(found['patterns'])} 个带变量的路径模板（如 %d），需人工展开，见工作文件夹 firmware-paths.json")
+                self.say(f"固件程序本身疑似内嵌色彩表 {found['embedded']} 个。" + ("若色彩表在这里而不在资源文件中，文件替换路线行不通。" if found["embedded"] else ""))
+
+            self.app.run_task("正在解包并分析固件（约 1 分钟）…", work, done)
 
         def write_backup(self):
             paths = [p.strip() for p in self.paths.get("1.0", "end").splitlines() if p.strip()]

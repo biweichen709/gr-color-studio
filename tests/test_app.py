@@ -106,6 +106,19 @@ class CameraWizard(unittest.TestCase):
         self.assertTrue(list((self.drives["C"] / "RC_OLD").rglob("startup.ttl")))
         self.assertEqual([d for d in self.dialogs if d[0] != "showinfo"], [])
 
+    def test_firmware_button_fills_ranked_backup_paths(self):
+        from tests.test_firmware import compressed_frame, container
+
+        strings = b"\0".join([b"A:\\Resource\\Jpeg\\GoodBye.jpg", b"E:\\BlkCtl15.bin", b"A:\\Resource\\Param\\ImgCtrl_Lut.bin"])
+        fw = self.tmp / "fwdc248b.bin"
+        fw.write_bytes(container(compressed_frame(list(strings))))
+        with mock.patch("tkinter.filedialog.askopenfilename", return_value=str(fw)):
+            self.page.paths_from_firmware()
+            self.wait()
+        self.app.update()
+        lines = self.page.paths.get("1.0", "end").split()
+        self.assertEqual(lines, ["A:\\Resource\\Param\\ImgCtrl_Lut.bin", "E:\\BlkCtl15.bin"])
+
     def test_style_page_exports_photo_and_cube(self):
         from PIL import Image
 

@@ -19,6 +19,7 @@
 | 照片处理 | JPG / PNG / TIFF / DNG 等 RAW；导出 JPEG 保留 EXIF；批量处理文件夹 |
 | LUT | 导出 33 / 65 精度 `.cube`，可导入自定义 `.cube` |
 | 写入相机（实验） | GR IV 机内色彩表的备份、替换与恢复向导，见 [docs/camera-workflow.md](docs/camera-workflow.md) |
+| 固件分析 | 解包官方固件，按可能性列出候选资源文件，并检测固件内嵌的色彩表 |
 
 ## 预设
 
@@ -38,3 +39,5 @@ python -m unittest discover -s tests -t .
 ```
 
 推送到 `main` 后，GitHub Actions 会在 Windows 上运行测试、构建并自检 exe，然后发布到 Releases。
+
+固件容器格式参考 [yeahnope/gr_unpack](https://github.com/yeahnope/gr_unpack) 的公开说明；相机脚本流程参考 [radium-wang/ricoh-gr4-firmware-analysis-and-feature-expansion](https://github.com/radium-wang/ricoh-gr4-firmware-analysis-and-feature-expansion) 的实机研究。
