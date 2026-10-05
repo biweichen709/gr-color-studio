@@ -98,6 +98,19 @@ class Card(unittest.TestCase):
         self.assertEqual((self.card / "RC_OLD/T/RCB001.BIN").read_bytes(), b"older original")
         self.assertIn("ricoh_color backup", (self.card / "script" / "startup.ttl").read_text())
 
+    def test_entry_sweep_written_and_removed(self):
+        from ricoh_color import firmware
+
+        files = firmware.entry_sweep(78350)
+        self.assertEqual(len(files), 1001)
+        card.write_files(self.card, files)
+        (self.card / "00078350.ABC").write_bytes(firmware.ENTRY_MARKER)
+        (self.card / "00078350.007").write_bytes(b"user file")
+        self.assertEqual(card.remove_sweep(self.card, 78350, firmware.ENTRY_MARKER), 999)
+        self.assertTrue((self.card / "00078350.ABC").exists())
+        self.assertTrue((self.card / "00078350.007").exists())
+        self.assertTrue((self.card / "DEVELOP.MOD").exists())
+
     def test_filesystem_name_is_reported_on_windows_only(self):
         fs = card.filesystem(self.tmp)
         if os.name == "nt":

@@ -82,3 +82,12 @@ def write_files(card, files, stamp=None):
             _move_aside(dst, card, stamp, moved)
         dst.write_bytes(data)
     return moved
+
+
+def remove_sweep(card, model_id, marker):
+    removed = 0
+    for path in Path(card).glob(f"{model_id:08d}.*"):
+        if len(path.suffix) == 4 and path.suffix[1:].isdigit() and path.read_bytes() == marker:
+            path.unlink()
+            removed += 1
+    return removed

@@ -157,3 +157,12 @@ def entry_files(name):
     if not re.fullmatch(r"\d{8}\.\d{3}", name):
         raise ValueError(f"{name} is not an 8.3 numeric entry name")
     return {name: ENTRY_MARKER, "DEVELOP.MOD": ENTRY_KEY}
+
+
+GR3_MODEL_ID = 0x1320E
+
+
+def entry_sweep(model_id):
+    files = {f"{model_id:08d}.{k:03d}": ENTRY_MARKER for k in range(1000)}
+    files["DEVELOP.MOD"] = ENTRY_KEY
+    return files

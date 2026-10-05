@@ -356,6 +356,7 @@ def run_gui():
             self.card_path = tk.StringVar()
             self.space = tk.StringVar(value="rgb")
             self.entry_choice = tk.StringVar(value=next(iter(firmware.KNOWN_ENTRIES)))
+            self.model_id = tk.StringVar(value=str(firmware.GR3_MODEL_ID))
             self.data = {}
             canvas = tk.Canvas(self, highlightthickness=0)
             bar = ttk.Scrollbar(self, orient="vertical", command=canvas.yview)
@@ -408,6 +409,10 @@ def run_gui():
             self.entry_box = ttk.Combobox(f, textvariable=self.entry_choice, values=self.entry_options(), state="readonly")
             self.entry_box.grid(row=3, column=1, sticky="ew", padx=4)
             self._buttons(f, 4, [("从固件查找入口…", self.find_entry), ("写入入口文件到 SD 卡", self.write_entry)])
+            sweep = self._buttons(f, 6, [("批量写入 1000 个候选", self.write_sweep), ("移除批量候选", self.remove_sweep)])
+            ttk.Label(sweep, text="机型编号").pack(side="left", padx=(12, 4))
+            ttk.Entry(sweep, textvariable=self.model_id, width=8).pack(side="left")
+            ttk.Label(sweep, foreground="#555", text="GR III 默认 78350（0x1320E）；入口名 = 机型编号 8 位 . 000~999").pack(side="left", padx=6)
             ttk.Label(f, foreground="#555", wraplength=820, justify="left",
                       text="写入后：关机 → 按住 MENU 不放再按电源键 → 进入工厂菜单后只把 Script 设为 Enable。机型或固件版本不在列表中时，先用「从固件查找入口」。").grid(row=5, column=0, columnspan=4, sticky="w")
 
@@ -555,6 +560,34 @@ def run_gui():
             for m in card.write_files(target, files):
                 self.say(f"卡上原有文件已移到 {m}")
             self.say(f"已写入 {' 和 '.join(files)} 到 SD 卡根目录。关机后按住 MENU 再开机。")
+
+        def sweep_id(self):
+            text = self.model_id.get().strip()
+            try:
+                value = int(text, 16) if text.lower().startswith("0x") else int(text)
+            except ValueError:
+                value = -1
+            if not 0 < value < 10**8:
+                messagebox.showerror(APP_NAME, "机型编号应为 1～99999999 的数字，例如 78350 或 0x1320E。")
+                return None
+            return value
+
+        def write_sweep(self):
+            target, model = self.need_card(), self.sweep_id()
+            if target is None or model is None:
+                return
+            files = firmware.entry_sweep(model)
+            for m in card.write_files(target, files):
+                self.say(f"卡上原有文件已移到 {m}")
+            self.say(f"已写入 {model:08d}.000～{model:08d}.999 共 1000 个入口候选和 DEVELOP.MOD。"
+                     "关机后按住 MENU 再开机；进入工厂菜单后只把 Script 设为 Enable，然后点「移除批量候选」。")
+
+        def remove_sweep(self):
+            target, model = self.need_card(), self.sweep_id()
+            if target is None or model is None:
+                return
+            removed = card.remove_sweep(target, model, firmware.ENTRY_MARKER)
+            self.say(f"已移除 {removed} 个入口候选（只删除本程序写入、内容未变的文件）。DEVELOP.MOD 保留。")
 
         def pick_card(self):
             path = filedialog.askdirectory(title="选择 SD 卡根目录")
