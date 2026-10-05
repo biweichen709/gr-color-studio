@@ -183,7 +183,12 @@ def cmd_factory_entry(args):
     found = firmware.find_entry(firmware.unpack(data) if firmware.is_container(data) else data)
     print(f"DEVELOP.MOD string: {found['develop_mod_present']}  marker: {found['marker_present']}  known key bytes: {found['key_present']}")
     for n in found["names"]:
-        print(f"{n['name']}  distance={n['distance']}")
+        print(f"{n['name']}  [{n['encoding']}]  distance={n['distance']}")
+    for f in found["formats"]:
+        print(f"format: {f}")
+    print("key offsets:", ", ".join(f"0x{o:x}" for o in found["key_offsets"]))
+    for ctx in found["context"]:
+        print(f"{ctx['relative']:+6d} [{ctx['encoding']}] {ctx['text'][:100]}")
     if args.write:
         name = args.name or (found["names"][0]["name"] if found["names"] else None)
         if not name:

@@ -86,5 +86,17 @@ class Entry(unittest.TestCase):
             firmware.entry_files("DEVELOP.MOD")
 
 
+    def test_utf16_names_formats_and_context(self):
+        payload = (bytes(100) + "DEVELOP.MOD".encode("utf-16-le") + b"\0\0"
+                   + "00055555.222".encode("utf-16-le") + b"\0\0"
+                   + b"name %08d.%03d\0" + firmware.ENTRY_KEY + b"\0[OPEN_FACTORY_DEBUG_MENU]\0" + bytes(100))
+        found = firmware.find_entry(payload)
+        self.assertEqual(found["names"][0]["name"], "00055555.222")
+        self.assertEqual(found["names"][0]["encoding"], "utf-16")
+        self.assertTrue(found["develop_mod_present"])
+        self.assertEqual(found["formats"], ["name %08d.%03d"])
+        self.assertIn("DEVELOP.MOD", [c["text"] for c in found["context"]])
+
+
 if __name__ == "__main__":
     unittest.main()

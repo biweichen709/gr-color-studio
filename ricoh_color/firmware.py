@@ -110,24 +110,46 @@ KNOWN_ENTRIES = {
     "GR IV / HDF / Monochrome 1.11": "00078560.636",
     "GR IIIx Urban / HDF 1.60": "00078490.609",
 }
-ENTRY_NAME = re.compile(rb"(?<![0-9A-Za-z])(\d{8}\.\d{3})(?![0-9A-Za-z])")
-ANCHORS = (b"DEVELOP.MOD", b"OPEN_FACTORY", b"FACTORY", b"Factory")
+ENTRY_NAME = re.compile(r"(?<![0-9A-Za-z])(\d{8}\.\d{3})(?![0-9A-Za-z])")
+NAME_FORMAT = re.compile(r"%0?8l?[du]\.%0?3l?[du]|%08[lX]")
+ANCHORS = ("DEVELOP", ".MOD", "OPEN_FACTORY", "FACTORY", "Factory")
+CONTEXT = 768
+
+
+def _texts(payload):
+    for offset, encoding, text in find_strings(payload):
+        yield offset, "utf-16" if encoding != "ascii" else "ascii", text
 
 
 def find_entry(payload):
-    anchors = sorted(m.start() for a in ANCHORS for m in re.finditer(re.escape(a), payload))
-    names = {}
-    for m in ENTRY_NAME.finditer(payload):
-        name = m.group(1).decode()
-        near = min((abs(m.start() - a) for a in anchors), default=None)
-        if name not in names or (near is not None and (names[name] is None or near < names[name])):
-            names[name] = near
-    ranked = sorted(names.items(), key=lambda kv: (kv[1] is None, kv[1] if kv[1] is not None else 0, kv[0]))
+    texts = list(_texts(payload))
+    anchors = [o for o, _, t in texts if any(a in t for a in ANCHORS)]
+    names, formats = {}, set()
+    for offset, encoding, text in texts:
+        for m in ENTRY_NAME.finditer(text):
+            near = min((abs(offset - a) for a in anchors), default=None)
+            old = names.get(m.group(1), ("", None))[1]
+            if m.group(1) not in names or (near is not None and (old is None or near < old)):
+                names[m.group(1)] = (encoding, near)
+        if NAME_FORMAT.search(text):
+            formats.add(text)
+    hits = [m.start() for m in re.finditer(re.escape(b"OPEN_FACTORY_DEBUG_MENU"), payload)]
+    hits += [m.start() for m in re.finditer(re.escape(ENTRY_KEY), payload)]
+    context = []
+    for center in hits:
+        for offset, encoding, text in texts:
+            if abs(offset - center) <= CONTEXT and (offset, text) not in [(c["offset"], c["text"]) for c in context]:
+                context.append({"offset": offset, "relative": offset - center, "encoding": encoding, "text": text})
+    ranked = sorted(names.items(), key=lambda kv: (kv[1][1] is None, kv[1][1] or 0, kv[0]))
+    joined = "\n".join(t for _, _, t in texts)
     return {
-        "names": [{"name": n, "distance": d} for n, d in ranked],
+        "names": [{"name": n, "encoding": e, "distance": d} for n, (e, d) in ranked],
+        "formats": sorted(formats),
+        "context": sorted(context, key=lambda c: c["offset"]),
         "key_present": ENTRY_KEY in payload,
-        "marker_present": b"OPEN_FACTORY_DEBUG_MENU" in payload,
-        "develop_mod_present": b"DEVELOP.MOD" in payload,
+        "key_offsets": [m.start() for m in re.finditer(re.escape(ENTRY_KEY), payload)],
+        "marker_present": "OPEN_FACTORY_DEBUG_MENU" in joined or b"OPEN_FACTORY_DEBUG_MENU" in payload,
+        "develop_mod_present": "DEVELOP.MOD" in joined,
     }
 
 

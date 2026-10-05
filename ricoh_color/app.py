@@ -523,12 +523,21 @@ def run_gui():
                 self.entry_box.configure(values=self.entry_options())
                 self.say(f"固件中 DEVELOP.MOD：{'有' if found['develop_mod_present'] else '无'}；"
                          f"入口标记：{'有' if found['marker_present'] else '无'}；已知密钥字节：{'有' if found['key_present'] else '无'}")
+                for f in found["formats"][:10]:
+                    self.say(f"  文件名格式串：{f}")
+                if found["key_offsets"]:
+                    self.say("  密钥位置：" + "、".join(f"0x{o:x}" for o in found["key_offsets"][:5]))
+                self.say("标记/密钥附近的文字（偏移为相对位置）：")
+                for c in found["context"][:40]:
+                    self.say(f"  {c['relative']:+6d} [{c['encoding']}] {c['text'][:100]}")
+                (self.ws() / "factory-entry.json").write_text(json.dumps(found, indent=2, ensure_ascii=False), encoding="utf-8")
+                self.say(f"完整结果已保存到 {self.ws() / 'factory-entry.json'}")
                 if not names:
-                    self.say("没有找到 8 位数字.3 位数字 形式的入口文件名，这个固件可能用其他方式进入工厂菜单。")
+                    self.say("没有找到 8 位数字.3 位数字 形式的入口文件名；请把上面的日志发给开发者分析。")
                     return
                 for n in found["names"][:10]:
                     near = "" if n["distance"] is None else f"（距工厂相关字符串 {n['distance']} 字节）"
-                    self.say(f"  候选入口：{n['name']}{near}")
+                    self.say(f"  候选入口：{n['name']} [{n['encoding']}]{near}")
                 self.entry_choice.set(f"固件查找：{names[0]}")
                 self.say("已选中最可能的候选。写入 SD 卡后按住 MENU 开机测试；进不去就换下一个候选。")
 
