@@ -70,5 +70,21 @@ class Paths(unittest.TestCase):
         self.assertEqual(found["partial"], ["Resource\\Table\\gamma.tbl"])
 
 
+class Entry(unittest.TestCase):
+    def test_entry_name_near_factory_strings_ranks_first(self):
+        payload = (b"IMG_0001.JPG\0version 00012345.678\0" + bytes(5000)
+                   + b"DEVELOP.MOD\0" + firmware.ENTRY_KEY + b"\x0000099999.111\0[OPEN_FACTORY_DEBUG_MENU]")
+        found = firmware.find_entry(payload)
+        self.assertEqual([n["name"] for n in found["names"]], ["00099999.111", "00012345.678"])
+        self.assertTrue(found["key_present"] and found["marker_present"] and found["develop_mod_present"])
+
+    def test_entry_files_are_exact(self):
+        files = firmware.entry_files("00078560.636")
+        self.assertEqual(files["DEVELOP.MOD"], bytes.fromhex("07 01 2c 1f 10 03 1e 16 05 2d"))
+        self.assertEqual(files["00078560.636"], b"[OPEN_FACTORY_DEBUG_MENU]\r\n")
+        with self.assertRaises(ValueError):
+            firmware.entry_files("DEVELOP.MOD")
+
+
 if __name__ == "__main__":
     unittest.main()

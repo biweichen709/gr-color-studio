@@ -102,3 +102,36 @@ def candidate_paths(payload):
         "patterns": sorted(patterns),
         "partial": sorted(partial),
     }
+
+
+ENTRY_MARKER = b"[OPEN_FACTORY_DEBUG_MENU]\r\n"
+ENTRY_KEY = bytes.fromhex("07012c1f10031e16052d")
+KNOWN_ENTRIES = {
+    "GR IV / HDF / Monochrome 1.11": "00078560.636",
+    "GR IIIx Urban / HDF 1.60": "00078490.609",
+}
+ENTRY_NAME = re.compile(rb"(?<![0-9A-Za-z])(\d{8}\.\d{3})(?![0-9A-Za-z])")
+ANCHORS = (b"DEVELOP.MOD", b"OPEN_FACTORY", b"FACTORY", b"Factory")
+
+
+def find_entry(payload):
+    anchors = sorted(m.start() for a in ANCHORS for m in re.finditer(re.escape(a), payload))
+    names = {}
+    for m in ENTRY_NAME.finditer(payload):
+        name = m.group(1).decode()
+        near = min((abs(m.start() - a) for a in anchors), default=None)
+        if name not in names or (near is not None and (names[name] is None or near < names[name])):
+            names[name] = near
+    ranked = sorted(names.items(), key=lambda kv: (kv[1] is None, kv[1] if kv[1] is not None else 0, kv[0]))
+    return {
+        "names": [{"name": n, "distance": d} for n, d in ranked],
+        "key_present": ENTRY_KEY in payload,
+        "marker_present": b"OPEN_FACTORY_DEBUG_MENU" in payload,
+        "develop_mod_present": b"DEVELOP.MOD" in payload,
+    }
+
+
+def entry_files(name):
+    if not re.fullmatch(r"\d{8}\.\d{3}", name):
+        raise ValueError(f"{name} is not an 8.3 numeric entry name")
+    return {name: ENTRY_MARKER, "DEVELOP.MOD": ENTRY_KEY}

@@ -355,6 +355,7 @@ def run_gui():
             self.workspace = tk.StringVar(value=str(default_workspace()))
             self.card_path = tk.StringVar()
             self.space = tk.StringVar(value="rgb")
+            self.entry_choice = tk.StringVar(value=next(iter(firmware.KNOWN_ENTRIES)))
             self.data = {}
             canvas = tk.Canvas(self, highlightthickness=0)
             bar = ttk.Scrollbar(self, orient="vertical", command=canvas.yview)
@@ -396,13 +397,19 @@ def run_gui():
             warn.grid(row=0, column=0, sticky="w", pady=(0, 6))
 
             f = self._step(1, "0. 准备", "工作文件夹保存备份原件和每一步的记录，请妥善保管。SD 卡请用 FAT32 格式，"
-                                       "并按参考项目说明放好工厂菜单入口文件、在工厂菜单里把 Script 设为 Enable。")
+                                       "并用下方按钮写入工厂菜单入口文件，进入工厂菜单后只把 Script 设为 Enable。")
             ttk.Label(f, text="工作文件夹").grid(row=1, column=0, sticky="w")
             ttk.Entry(f, textvariable=self.workspace).grid(row=1, column=1, sticky="ew", padx=4)
             ttk.Button(f, text="选择…", command=self.pick_workspace).grid(row=1, column=2)
             ttk.Label(f, text="SD 卡根目录").grid(row=2, column=0, sticky="w")
             ttk.Entry(f, textvariable=self.card_path).grid(row=2, column=1, sticky="ew", padx=4)
             ttk.Button(f, text="选择…", command=self.pick_card).grid(row=2, column=2)
+            ttk.Label(f, text="工厂菜单入口").grid(row=3, column=0, sticky="w")
+            self.entry_box = ttk.Combobox(f, textvariable=self.entry_choice, values=self.entry_options(), state="readonly")
+            self.entry_box.grid(row=3, column=1, sticky="ew", padx=4)
+            self._buttons(f, 4, [("从固件查找入口…", self.find_entry), ("写入入口文件到 SD 卡", self.write_entry)])
+            ttk.Label(f, foreground="#555", wraplength=820, justify="left",
+                      text="写入后：关机 → 按住 MENU 不放再按电源键 → 进入工厂菜单后只把 Script 设为 Enable。机型或固件版本不在列表中时，先用「从固件查找入口」。").grid(row=5, column=0, columnspan=4, sticky="w")
 
             f = self._step(2, "1. 备份（只读相机，只写 SD 卡）",
                            "每行一个要备份的相机路径（A:\\... 或 E:\\...）。可用命令行 strings 工具从解包固件中找候选路径。"
@@ -478,6 +485,7 @@ def run_gui():
             self.paths.delete("1.0", "end")
             self.paths.insert("1.0", "\n".join(self.data.get("paths", [])))
             self.show_candidates()
+            self.entry_box.configure(values=self.entry_options())
 
         def need_card(self):
             path = self.card_path.get().strip()
@@ -491,6 +499,53 @@ def run_gui():
             if path:
                 self.workspace.set(path)
                 self.load_state()
+
+        def entry_options(self):
+            options = [f"{model}：{name}" for model, name in firmware.KNOWN_ENTRIES.items()]
+            return options + [f"固件查找：{n}" for n in self.data.get("entry_names", [])]
+
+        def entry_name(self):
+            return self.entry_choice.get().rsplit("：", 1)[-1]
+
+        def find_entry(self):
+            path = filedialog.askopenfilename(title="选择官方固件", filetypes=[("固件", "*.bin *.BIN"), ("所有文件", "*.*")])
+            if not path:
+                return
+
+            def work():
+                data = Path(path).read_bytes()
+                return firmware.find_entry(firmware.unpack(data) if firmware.is_container(data) else data)
+
+            def done(found):
+                names = [n["name"] for n in found["names"]][:10]
+                self.data["entry_names"] = names
+                self.save_state()
+                self.entry_box.configure(values=self.entry_options())
+                self.say(f"固件中 DEVELOP.MOD：{'有' if found['develop_mod_present'] else '无'}；"
+                         f"入口标记：{'有' if found['marker_present'] else '无'}；已知密钥字节：{'有' if found['key_present'] else '无'}")
+                if not names:
+                    self.say("没有找到 8 位数字.3 位数字 形式的入口文件名，这个固件可能用其他方式进入工厂菜单。")
+                    return
+                for n in found["names"][:10]:
+                    near = "" if n["distance"] is None else f"（距工厂相关字符串 {n['distance']} 字节）"
+                    self.say(f"  候选入口：{n['name']}{near}")
+                self.entry_choice.set(f"固件查找：{names[0]}")
+                self.say("已选中最可能的候选。写入 SD 卡后按住 MENU 开机测试；进不去就换下一个候选。")
+
+            self.app.run_task("正在解包并查找工厂菜单入口…", work, done)
+
+        def write_entry(self):
+            target = self.need_card()
+            if target is None:
+                return
+            try:
+                files = firmware.entry_files(self.entry_name())
+            except ValueError as exc:
+                messagebox.showerror(APP_NAME, str(exc))
+                return
+            for m in card.write_files(target, files):
+                self.say(f"卡上原有文件已移到 {m}")
+            self.say(f"已写入 {' 和 '.join(files)} 到 SD 卡根目录。关机后按住 MENU 再开机。")
 
         def pick_card(self):
             path = filedialog.askdirectory(title="选择 SD 卡根目录")

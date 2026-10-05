@@ -178,6 +178,22 @@ def cmd_firmware_paths(args):
         print(f"wrote {len(found['files'])} paths to {args.output}")
 
 
+def cmd_factory_entry(args):
+    data = Path(args.file).read_bytes()
+    found = firmware.find_entry(firmware.unpack(data) if firmware.is_container(data) else data)
+    print(f"DEVELOP.MOD string: {found['develop_mod_present']}  marker: {found['marker_present']}  known key bytes: {found['key_present']}")
+    for n in found["names"]:
+        print(f"{n['name']}  distance={n['distance']}")
+    if args.write:
+        name = args.name or (found["names"][0]["name"] if found["names"] else None)
+        if not name:
+            raise SystemExit("no entry name found; pass --name")
+        Path(args.write).mkdir(parents=True, exist_ok=True)
+        for f, data in firmware.entry_files(name).items():
+            (Path(args.write) / f).write_bytes(data)
+        print(f"wrote {name} and DEVELOP.MOD to {args.write}")
+
+
 def build_parser():
     p = argparse.ArgumentParser(prog="ricoh_color", description=__doc__)
     sub = p.add_subparsers(dest="command", required=True)
@@ -241,6 +257,12 @@ def build_parser():
     s.add_argument("image")
     s.add_argument("output")
     s.set_defaults(func=cmd_hald_to_cube)
+
+    s = sub.add_parser("factory-entry", help="find factory-menu entry file names in a firmware file")
+    s.add_argument("file")
+    s.add_argument("--write", metavar="DIR", help="write the entry files into DIR (e.g. the SD card root)")
+    s.add_argument("--name", help="entry name to write instead of the best candidate")
+    s.set_defaults(func=cmd_factory_entry)
 
     s = sub.add_parser("firmware-paths", help="list camera file paths referenced by a firmware file, ranked")
     s.add_argument("file", help="official firmware (e.g. fwdc248b.bin) or a decoded payload")

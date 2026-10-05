@@ -70,3 +70,15 @@ def finish(card, stamp=None):
     moved = []
     _move_aside(script, card, stamp or _timestamp(), moved)
     return moved[0]
+
+
+def write_files(card, files, stamp=None):
+    card = Path(card)
+    stamp = stamp or _timestamp()
+    moved = []
+    for name, data in files.items():
+        dst = card / name
+        if dst.exists() and dst.read_bytes() != data:
+            _move_aside(dst, card, stamp, moved)
+        dst.write_bytes(data)
+    return moved

@@ -119,6 +119,23 @@ class CameraWizard(unittest.TestCase):
         lines = self.page.paths.get("1.0", "end").split()
         self.assertEqual(lines, ["A:\\Resource\\Param\\ImgCtrl_Lut.bin", "E:\\BlkCtl15.bin"])
 
+    def test_entry_found_in_firmware_is_written_to_card(self):
+        from ricoh_color import firmware
+        from tests.test_firmware import compressed_frame, container
+
+        (self.drives["C"] / "DEVELOP.MOD").write_bytes(b"typed in notepad")
+        fw = self.tmp / "gr3.bin"
+        fw.write_bytes(container(compressed_frame(list(b"DEVELOP.MOD\x0000077777.123\0"))))
+        with mock.patch("tkinter.filedialog.askopenfilename", return_value=str(fw)):
+            self.page.find_entry()
+            self.wait()
+        self.app.update()
+        self.assertEqual(self.page.entry_name(), "00077777.123")
+        self.page.write_entry()
+        self.assertEqual((self.drives["C"] / "00077777.123").read_bytes(), firmware.ENTRY_MARKER)
+        self.assertEqual((self.drives["C"] / "DEVELOP.MOD").read_bytes(), firmware.ENTRY_KEY)
+        self.assertTrue(list((self.drives["C"] / "RC_OLD").rglob("DEVELOP.MOD")))
+
     def test_style_page_exports_photo_and_cube(self):
         from PIL import Image
 
