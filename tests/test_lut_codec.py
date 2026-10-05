@@ -78,10 +78,10 @@ class Codec(unittest.TestCase):
     def test_memory_order(self):
         spec = codec.TableSpec(grid=2, dtype="u8", maxval=255, fastest="r", channels="rgb")
         data = codec.encode(lut.identity(2), spec, bytes(spec.nbytes))
-        self.assertEqual(list(data[:6]), [0, 0, 0, 255, 0, 0])  # node 1 is red = 1
+        self.assertEqual(list(data[:6]), [0, 0, 0, 255, 0, 0])
         spec = codec.TableSpec(grid=2, dtype="u8", maxval=255, fastest="b", channels="bgr")
         data = codec.encode(lut.identity(2), spec, bytes(spec.nbytes))
-        self.assertEqual(list(data[:6]), [0, 0, 0, 255, 0, 0])  # node 1 is blue = 1, stored first
+        self.assertEqual(list(data[:6]), [0, 0, 0, 255, 0, 0])
 
     def test_spec_validation_and_bounds(self):
         with self.assertRaises(ValueError):

@@ -1,5 +1,3 @@
-"""Colour conversions (sRGB / D65) and CIEDE2000."""
-
 import numpy as np
 
 SRGB_TO_XYZ = np.array(
@@ -11,7 +9,6 @@ SRGB_TO_XYZ = np.array(
 )
 D65 = np.array([0.95047, 1.0, 1.08883])
 
-# JPEG (BT.601 full-range) YCbCr, with Cb/Cr centred on 0.5.
 RGB_TO_YCC = np.array(
     [
         [0.299, 0.587, 0.114],

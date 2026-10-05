@@ -23,8 +23,6 @@ def run(*argv):
 
 
 class CameraWorkflow(unittest.TestCase):
-    """Discover -> back up -> remap -> install -> verify -> restore, through the CLI."""
-
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, self.tmp)

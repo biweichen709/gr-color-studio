@@ -1,5 +1,3 @@
-"""3D LUTs as float arrays shaped (N, N, N, 3), indexed [r, g, b] on [0, 1]."""
-
 from pathlib import Path
 
 import numpy as np
@@ -14,14 +12,12 @@ def identity(n):
 
 
 def cell(n, rgb):
-    """Lower corner index and fractional position of each colour inside the grid."""
     x = np.clip(np.asarray(rgb, dtype=np.float64), 0.0, 1.0) * (n - 1)
     i0 = np.minimum(np.floor(x).astype(np.intp), n - 2)
     return i0, x - i0
 
 
 def corners(i0, f):
-    """Yield ((r, g, b) index arrays, trilinear weight) for the 8 cell corners."""
     for dr in (0, 1):
         wr = f[..., 0] if dr else 1.0 - f[..., 0]
         for dg in (0, 1):
@@ -32,7 +28,6 @@ def corners(i0, f):
 
 
 def apply(lut, rgb):
-    """Trilinear lookup of colours (..., 3) through lut."""
     i0, f = cell(lut.shape[0], rgb)
     out = np.zeros(i0.shape, dtype=np.float64)
     for index, weight in corners(i0, f):
@@ -68,7 +63,6 @@ def read_cube(path):
         raise ValueError("missing LUT_3D_SIZE")
     if len(rows) != size**3:
         raise ValueError(f"expected {size**3} rows, found {len(rows)}")
-    # .cube rows run with red fastest, so the reshape yields [b][g][r].
     return np.asarray(rows).reshape(size, size, size, 3).transpose(2, 1, 0, 3)
 
 
@@ -82,7 +76,6 @@ def write_cube(path, lut, title=None):
 
 
 def hald_identity(level):
-    """Identity Hald CLUT image (level**3 square pixels) for a cube of level**2 nodes."""
     n = level * level
     side = level**3
     pixels = identity(n).transpose(2, 1, 0, 3).reshape(side, side, 3)
@@ -90,7 +83,6 @@ def hald_identity(level):
 
 
 def hald_to_lut(image):
-    """Convert a graded Hald image (float, square, side = level**3) back into a LUT."""
     side = image.shape[0]
     level = round(side ** (1 / 3))
     if image.shape[:2] != (side, side) or level**3 != side:

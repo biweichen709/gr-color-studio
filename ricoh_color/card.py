@@ -1,10 +1,3 @@
-"""Put a staged workflow onto an SD card without destroying anything already there.
-
-Anything in the way (a user's own startup script, outputs of an earlier run
-that would make the camera skip a step, a differing file of the same name) is
-moved into RC_OLD/<timestamp>/ on the card instead of being overwritten.
-"""
-
 import datetime
 import json
 import os
@@ -19,7 +12,6 @@ def _timestamp():
 
 
 def filesystem(root):
-    """Filesystem name of the volume holding root (Windows only), else None."""
     if os.name != "nt":
         return None
     import ctypes
@@ -53,7 +45,6 @@ def _move_aside(path, card, stamp, moved):
 
 
 def stage_to_card(stage, card, stamp=None):
-    """Copy stage/card/* onto the card root; return the card paths moved aside."""
     stage, card = Path(stage), Path(card)
     plan = json.loads((stage / "plan.json").read_text())
     stamp = stamp or _timestamp()
@@ -72,7 +63,6 @@ def stage_to_card(stage, card, stamp=None):
 
 
 def finish(card, stamp=None):
-    """Move the active startup script aside so the camera stops running it."""
     card = Path(card)
     script = card / "script" / "startup.ttl"
     if not script.exists():

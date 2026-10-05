@@ -1,11 +1,3 @@
-"""Decode/encode a 3D colour table stored inside an arbitrary binary file.
-
-The camera's real storage format is unknown. A TableSpec describes one
-hypothesis (grid, sample type, layout, axis order, byte offset); the scanner
-proposes specs and these functions turn bytes into a LUT and back without
-changing any byte outside the table or the file length.
-"""
-
 import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -20,10 +12,10 @@ class TableSpec:
     grid: int
     dtype: str = "u16le"
     maxval: float = 4095
-    layout: str = "interleaved"  # or "planar": all of channel 0, then 1, then 2
-    fastest: str = "r"  # input axis that varies fastest in memory: "r" or "b"
-    channels: str = "rgb"  # output channel order inside a node/plane: "rgb" or "bgr"
-    pad: int = 0  # extra stored values per node (interleaved only), preserved on encode
+    layout: str = "interleaved"
+    fastest: str = "r"
+    channels: str = "rgb"
+    pad: int = 0
     offset: int = 0
 
     def __post_init__(self):
@@ -71,7 +63,6 @@ def _check_bounds(spec, length):
 
 
 def _to_rgb_axes(stored, spec):
-    """(slow, mid, fast, ch) storage view -> [r, g, b, ch] in rgb channel order."""
     a = stored.transpose(2, 1, 0, 3) if spec.fastest == "r" else stored
     return a[..., ::-1] if spec.channels == "bgr" else a
 
@@ -95,7 +86,6 @@ def decode(data, spec):
 
 
 def encode(lut, spec, template):
-    """Return template with the table region replaced by lut; length is unchanged."""
     n = spec.grid
     lut = np.asarray(lut, dtype=np.float64)
     if lut.shape != (n, n, n, 3):

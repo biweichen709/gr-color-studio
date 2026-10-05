@@ -1,5 +1,3 @@
-"""Command-line entry point: python3 -m ricoh_color <command> ..."""
-
 import argparse
 import json
 import sys
@@ -12,9 +10,6 @@ from . import codec, color, fit, lut, remap, safety, scan
 
 def _print_json(data):
     print(json.dumps(data, indent=2, ensure_ascii=False))
-
-
-# ---------------------------------------------------------------- discovery
 
 
 def cmd_strings(args):
@@ -60,9 +55,6 @@ def cmd_extract(args):
     data = Path(args.file).read_bytes()
     lut.write_cube(args.out, codec.decode(data, codec.TableSpec.load(args.spec)))
     print(f"wrote {args.out}")
-
-
-# ---------------------------------------------------------------- looks
 
 
 def cmd_remap(args):
@@ -128,9 +120,6 @@ def cmd_hald_to_cube(args):
     print(f"wrote {args.output}")
 
 
-# ---------------------------------------------------------------- safety net
-
-
 def _report(result, ok_values):
     _print_json(result)
     bad = [e for e in result["entries"] if e.get("status", e.get("verdict")) not in ok_values]
@@ -174,9 +163,6 @@ def cmd_verify_readback(args):
     if not result["permit_consumed"]:
         print("warning: RCARM.TXT was not consumed; the script probably did not run", file=sys.stderr)
     _report(result, {"PASS"})
-
-
-# ---------------------------------------------------------------- parser
 
 
 def build_parser():

@@ -1,11 +1,3 @@
-"""Host model of the TTL subset emitted by ricoh_color.safety.
-
-It mirrors two camera behaviours documented by the reference project: filestat
-leaves its variable untouched when a file is missing, and filecopy overwrites
-without truncating a longer destination. It is a control-flow model, not an
-emulation of camera storage timing or error codes.
-"""
-
 import re
 
 TOKEN = re.compile(r"'[^']*'|\S+")

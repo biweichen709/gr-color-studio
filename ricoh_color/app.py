@@ -1,5 +1,3 @@
-"""GR 色彩工坊：风格调色、批量出片，以及实验性的相机色彩表写入向导。"""
-
 import datetime
 import json
 import os
@@ -66,7 +64,6 @@ def hsv_to_rgb(h, s, v):
 
 
 def sample_image(width=960, height=640):
-    """Colour checker, hue/saturation sweep and grey ramp."""
     img = np.zeros((height, width, 3))
     pw, ph, band = width // 6, height * 10 // 64, height * 12 // 64
     for k, c in enumerate(CHECKER):
@@ -88,9 +85,6 @@ def table_for(source, adjust, grid=33):
 
 def default_workspace():
     return Path.home() / "Documents" / "GR色彩工坊"
-
-
-# ---------------------------------------------------------------- GUI
 
 
 def run_gui():
@@ -179,7 +173,6 @@ def run_gui():
             self.canvas.grid(row=1, column=0, sticky="nsew", pady=(6, 0))
             self.canvas.bind("<Configure>", lambda e: self.show())
 
-        # ---- state
 
         def source(self):
             selection = self.tree.selection()
@@ -200,7 +193,6 @@ def run_gui():
             name = self.source()[1]
             return name if self.adjust().is_neutral() else f"{name}（已微调）"
 
-        # ---- preview
 
         def _on_select(self):
             selection = self.tree.selection()
@@ -246,7 +238,6 @@ def run_gui():
                 self.vars[key].set(default)
             self.schedule()
 
-        # ---- files
 
         def open_photo(self):
             exts = " ".join(f"*{e} *{e.upper()}" for e in sorted(photo.IMAGE_EXTENSIONS | photo.RAW_EXTENSIONS))
@@ -381,7 +372,6 @@ def run_gui():
             self._build()
             self.load_state()
 
-        # ---- layout
 
         def _step(self, row, title, text):
             frame = ttk.LabelFrame(self.body, text=title, padding=8)
@@ -452,7 +442,6 @@ def run_gui():
             self.log = tk.Text(self.body, height=12, width=100, state="disabled")
             self.log.grid(row=7, column=0, sticky="ew", pady=(6, 0))
 
-        # ---- helpers
 
         def say(self, text):
             stamp = datetime.datetime.now().strftime("%H:%M:%S")
@@ -532,7 +521,6 @@ def run_gui():
                 self.say(f"  {e['target']}：{verdict}")
             return bad
 
-        # ---- steps
 
         def write_backup(self):
             paths = [p.strip() for p in self.paths.get("1.0", "end").splitlines() if p.strip()]
@@ -801,11 +789,7 @@ def log_error(text):
         pass
 
 
-# ---------------------------------------------------------------- entry points
-
-
 def selftest(gui=True):
-    """Exercise the packaged pieces end to end without user interaction."""
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
         sample = sample_image()
@@ -844,7 +828,6 @@ def main(argv=None):
         except Exception:
             pass
     if "--selftest" in argv:
-        # A windowed build has no console; print() is a no-op there, the exit code is what counts.
         try:
             selftest(gui="--no-gui" not in argv)
         except Exception:

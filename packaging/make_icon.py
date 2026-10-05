@@ -1,5 +1,3 @@
-"""Draw the app icon (a colour wheel behind a lens ring) and save it as .ico."""
-
 import sys
 
 import numpy as np

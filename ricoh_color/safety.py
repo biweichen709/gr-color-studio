@@ -1,20 +1,3 @@
-"""SD-card TTL workflows that back up, replace and restore camera files.
-
-The camera runs ``script/startup.ttl`` from the SD card when the factory menu's
-Script option is enabled (see radium-wang/ricoh-gr4-firmware-analysis-and-
-feature-expansion). Generated scripts use only interpreter commands and
-comparison operators that project already exercised on a GR IV.
-
-Safety rules enforced here, not left to the operator:
-* a backup run only reads camera storage and writes to the card (C:);
-* a write is generated only for an A: file that has a verified backup;
-* the replacement must have exactly the backed-up length (filecopy does not
-  truncate), and the camera re-checks both lengths before writing;
-* writes are one-shot: a permit file is consumed and re-read first, and each
-  readback name is reserved before its target is touched;
-* the host compares every readback's full SHA-256 against the expected file.
-"""
-
 import hashlib
 import json
 import re
@@ -68,9 +51,6 @@ def _leave_if(cond, target="exit"):
     return [f"if {cond} then", f"    {action}", "endif"]
 
 
-# ---------------------------------------------------------------- backup
-
-
 def backup_script(entries):
     lines = [
         "; ricoh_color backup: reads camera storage, writes only to the SD card.",
@@ -89,7 +69,6 @@ def backup_script(entries):
             "s1 = -1",
             f"filestat {target} s1",
             *_leave_if("s1 < 0", f"w{tag}"),
-            # Preserve the first backup if this entry was copied by an earlier run.
             f"filesearch {copy}",
             *_leave_if("result = 1", f"k{tag}"),
             f"filecopy {target} {copy}",
@@ -135,7 +114,6 @@ def backup_plan(targets, stage):
 
 
 def backup_verify(plan_path, card, archive):
-    """Check the card after a backup run and archive the verified originals."""
     plan = json.loads(Path(plan_path).read_text())
     if plan.get("kind") != "backup":
         raise ValueError("not a backup plan")
@@ -163,13 +141,9 @@ def backup_verify(plan_path, card, archive):
     return manifest
 
 
-# ---------------------------------------------------------------- install / restore
-
-
 def write_script(entries, kind):
     lines = [
         f"; ricoh_color {kind}: one-shot, length-guarded writes with readback to the SD card.",
-        # Consume the permit and confirm the card accepted that before any write.
         f"fileopen fh {_q(_sd(ARM))} 0",
         *_leave_if("fh < 0"),
         "fileread fh 1 arm",
@@ -228,7 +202,6 @@ def _load_archive(archive):
 
 
 def write_plan(kind, archive, stage, replacements=None, only=None):
-    """Stage an install (replacements: {target: new file}) or a restore of backups."""
     source_prefix, readback_prefix = WRITE_KINDS[kind]
     backups = _load_archive(archive)
     if kind == "install":

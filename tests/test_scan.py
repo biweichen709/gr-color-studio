@@ -48,7 +48,6 @@ class FindTables(unittest.TestCase):
             alternative = codec.TableSpec(**dict(hit["spec"], **hit["alternative"]))
             self.assertEqual((found.grid, found.dtype, found.layout, found.pad, found.maxval),
                              (spec.grid, spec.dtype, spec.layout, spec.pad, spec.maxval))
-            # Structure alone cannot tell red from blue: the truth is one of the two readings.
             errors = [np.abs(codec.decode(self.data, s) - table).max() for s in (found, alternative)]
             self.assertLess(min(errors), 1.0 / spec.maxval + 1e-6)
 

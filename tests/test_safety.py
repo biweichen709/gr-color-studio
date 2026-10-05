@@ -107,7 +107,6 @@ class Workflow(unittest.TestCase):
         self.assertEqual(self.read("A", FOO), new.read_bytes())
         self.assertEqual(self.read("A", BAR), self.bar)
 
-        # A second boot must not write again: the permit is spent.
         copies = len(self.camera.copies)
         self.boot()
         self.assertEqual(len(self.camera.copies), copies)
@@ -135,7 +134,7 @@ class Workflow(unittest.TestCase):
         self.assertEqual(self.read("A", FOO), self.foo + b"grown")
 
     def test_failed_sd_copy_is_never_treated_as_a_backup(self):
-        class EmptyCopies(Camera):  # Issue #1: some cards produced empty copies
+        class EmptyCopies(Camera):
             def copy(self, src, dst):
                 dst.write_bytes(b"")
 

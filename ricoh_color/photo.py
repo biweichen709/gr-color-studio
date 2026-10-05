@@ -1,5 +1,3 @@
-"""Photo loading, LUT application at full resolution, and JPEG export."""
-
 from pathlib import Path
 
 import numpy as np
@@ -11,14 +9,11 @@ RAW_EXTENSIONS = {".dng", ".pef", ".nef", ".cr2", ".cr3", ".arw", ".raf", ".orf"
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".tif", ".tiff"}
 CHUNK_PIXELS = 1 << 17
 
-# EXIF tags worth carrying from a raw file into the exported JPEG.
 IFD0_TAGS = (0x010F, 0x0110, 0x0131, 0x0132, 0x013B, 0x8298)
 EXIF_IFD = 0x8769
 
 
 class Photo:
-    """Pixels as stored (uint8 RGB) plus what is needed to save them faithfully."""
-
     def __init__(self, pixels, exif=None, icc=None, orientation=1, source=None):
         self.pixels = pixels
         self.exif = exif
@@ -40,7 +35,7 @@ class Photo:
 
 def raw_supported():
     try:
-        import rawpy  # noqa: F401
+        import rawpy
     except ImportError:
         return False
     return True
@@ -87,11 +82,6 @@ def load(path):
 
 
 def apply_lut(table, pixels):
-    """Trilinear LUT lookup on uint8 RGB pixels, in bounded-memory chunks.
-
-    Every 8-bit level maps to a fixed cell and fraction, so those come from
-    256-entry tables; corners are gathered from the flattened LUT.
-    """
     n = table.shape[0]
     flat = np.ascontiguousarray(table, dtype=np.float32).reshape(-1, 3) * np.float32(255)
     level, frac = cell(n, np.arange(256) / 255.0)

@@ -1,15 +1,3 @@
-"""Parametric colour looks, baked into 3D LUTs.
-
-Presets are hand-tuned approximations of how these styles are commonly
-described (natural skin and soft roll-off for HNCS; the published character
-of each Fujifilm film simulation). They contain no Hasselblad, Fujifilm or
-Ricoh data and are not affiliated with those companies.
-
-Pipeline on display (sRGB) values: white balance in linear light, optional
-B&W channel mix, monotone tone curves, then hue/saturation/toning edits in
-OkLCh, and finally a gamut map that keeps lightness and hue.
-"""
-
 from dataclasses import dataclass, replace
 
 import numpy as np
@@ -17,7 +5,6 @@ import numpy as np
 from .color import linear_to_srgb, srgb_to_linear
 from .lut import apply, identity
 
-# Oklab hue (degrees) of each adjustable band; sRGB red is ~29, skin ~55.
 BANDS = {
     "red": 25, "orange": 55, "yellow": 100, "green": 140,
     "cyan": 195, "blue": 255, "purple": 295, "magenta": 335,
@@ -26,11 +13,7 @@ BAND_SIGMA = 24.0
 LUMA = np.array([0.2126, 0.7152, 0.0722])
 
 
-# ---------------------------------------------------------------- building blocks
-
-
 def monotone_curve(points):
-    """Monotone cubic (PCHIP) through (x, y) control points; returns a vectorised f."""
     xs, ys = (np.asarray(v, dtype=np.float64) for v in zip(*sorted(points)))
     h = np.diff(xs)
     delta = np.diff(ys) / h
@@ -90,7 +73,6 @@ def _smoothstep(e0, e1, x):
 
 
 def _gamut_map(lin, lightness):
-    """Pull out-of-range colours toward the grey of equal Oklab lightness."""
     grey = np.clip(lightness, 0.0, 1.0)[..., None] ** 3
     d = lin - grey
     with np.errstate(divide="ignore", invalid="ignore"):
@@ -100,34 +82,29 @@ def _gamut_map(lin, lightness):
     return np.clip(grey + t * d, 0.0, 1.0)
 
 
-# ---------------------------------------------------------------- looks
-
-
 @dataclass(frozen=True)
 class Look:
     key: str
     name: str
     group: str
     note: str = ""
-    curve: tuple = ((0.0, 0.0), (1.0, 1.0))  # master tone curve on display values
-    curve_luma: float = 0.0  # 0 = per channel (film-like), 1 = lightness only
-    rgb_curves: tuple = (None, None, None)  # optional extra curve per channel
-    temp: float = 0.0  # + warmer
-    tint: float = 0.0  # + magenta
+    curve: tuple = ((0.0, 0.0), (1.0, 1.0))
+    curve_luma: float = 0.0
+    rgb_curves: tuple = (None, None, None)
+    temp: float = 0.0
+    tint: float = 0.0
     saturation: float = 1.0
     vibrance: float = 0.0
     shadow_sat: float = 1.0
     highlight_sat: float = 1.0
-    bands: tuple = ()  # (band, hue shift deg, saturation x, lightness +)
-    shadow_tint: tuple = (0.0, 0.0)  # (Oklab hue deg, amount)
+    bands: tuple = ()
+    shadow_tint: tuple = (0.0, 0.0)
     highlight_tint: tuple = (0.0, 0.0)
-    mono: tuple = None  # B&W channel weights (linear light)
+    mono: tuple = None
 
 
 @dataclass(frozen=True)
 class Adjust:
-    """User fine-tuning on top of a preset; all zero/one means 'as designed'."""
-
     strength: float = 1.0
     temp: float = 0.0
     tint: float = 0.0
@@ -213,7 +190,6 @@ def _colour(lab, look, adjust):
 
 
 def render(look, display, adjust=Adjust()):
-    """Apply look to display-referred sRGB values (..., 3) in 0..1."""
     x = np.clip(np.asarray(display, dtype=np.float64), 0.0, 1.0)
     out = _white_balance(x, look.temp + adjust.temp * 0.3, look.tint + adjust.tint * 0.3)
     if look.mono:
@@ -234,13 +210,10 @@ NEUTRAL = Look("neutral", "原样", "")
 
 
 def bake_lut(table, adjust=Adjust(), grid=33):
-    """An imported LUT with the user's fine-tuning applied after it."""
     x = identity(grid)
     graded = render(NEUTRAL, apply(table, x), replace(adjust, strength=1.0))
     return x + adjust.strength * (graded - x)
 
-
-# ---------------------------------------------------------------- presets
 
 HNCS = "哈苏 HNCS 风格（近似）"
 FUJI = "富士胶片模拟风格（近似）"

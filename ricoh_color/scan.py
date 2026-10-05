@@ -1,9 +1,3 @@
-"""Find candidate colour tables in a firmware payload or a backed-up resource file.
-
-Every hit is a hypothesis: export it to .cube, look at it, and confirm it on
-the camera before treating it as the table behind an image style.
-"""
-
 import re
 from functools import lru_cache
 from itertools import permutations
@@ -24,15 +18,12 @@ DRIVE_PATH = re.compile(r"\b[A-Z]:\\")
 GRIDS = (9, 16, 17, 32, 33, 65)
 SCAN_DTYPES = ("u8", "u16le", "u16be")
 LAYOUTS = (("interleaved", 0), ("interleaved", 1), ("planar", 0))
-BLOCK = 768  # values per coarse block; a multiple of 3 and 4
+BLOCK = 768
 CHUNK_BLOCKS = 4096
 MIN_STRUCTURE = 0.5
 MIN_WRAP_SHARE = 0.5
 OUTLIER_BEND = 0.4
 MAXVALS = (255, 1023, 4095, 16383, 65535)
-
-
-# ---------------------------------------------------------------- strings
 
 
 def find_strings(data, min_len=4):
@@ -56,11 +47,7 @@ def interesting_strings(data, extra=()):
             yield {"offset": offset, "encoding": encoding, "text": text, "keywords": hits, "path": path}
 
 
-# ---------------------------------------------------------------- 3D tables
-
-
 def _geometry(n, layout, pad):
-    """(values between same-channel neighbours, values per row, values per table)."""
     if layout == "interleaved":
         stride = 3 + pad
         return stride, n * stride, n**3 * stride
@@ -68,12 +55,10 @@ def _geometry(n, layout, pad):
 
 
 def _max_rough(n):
-    # Mean bending of a smooth table shrinks with the square of the node spacing.
     return 8.0 / (n - 1) ** 2
 
 
 def _smooth_blocks(values, stride):
-    """Per block: do same-channel neighbours bend little relative to the block's span?"""
     nblocks = len(values) // BLOCK
     flags = np.zeros(nblocks, dtype=bool)
     for first in range(0, nblocks, CHUNK_BLOCKS):
@@ -82,7 +67,6 @@ def _smooth_blocks(values, stride):
         span = v.max(1) - v.min(1)
         bend = np.median(np.abs(v[:, 2 * stride :] - 2 * v[:, stride:-stride] + v[:, : -2 * stride]), axis=1)
         distinct = (np.diff(np.sort(v, axis=1), axis=1) > 0).sum(1) + 1
-        # Near-identity tables of small grids hold only a handful of distinct values.
         flags[first:last] = (span > 0) & (bend <= 0.1 * span) & (distinct >= 5)
     return flags
 
@@ -93,7 +77,6 @@ def _runs(flags):
 
 
 def _storage(values, start, n, layout, pad, planes):
-    """First `planes` slow planes as (slow, mid, fast, channel) in storage order."""
     if layout == "interleaved":
         width = 3 + pad
         window = values[start : start + planes * n * n * width]
@@ -113,7 +96,6 @@ def _centred_coords(shape):
 
 
 def _correlations(s):
-    """corr[channel, axis]: stored channel value against storage axis index."""
     y, sy = _centred_coords(s.shape[:3])
     x = s.reshape(-1, 3)
     x = x - x.mean(0)
@@ -123,12 +105,6 @@ def _correlations(s):
 
 
 def _score(s, structure=True):
-    """(outliers, roughness, structure) of a window read as a table.
-
-    A real table bends gently: few large second differences, low mean
-    roughness, and each input axis drives one output channel. A percentile
-    span keeps one stray value from making a misaligned window look smooth.
-    """
     lo, hi = np.percentile(s, [1, 99])
     span = hi - lo
     if span <= 0:
@@ -140,21 +116,11 @@ def _score(s, structure=True):
 
 
 def _assignment(corr):
-    """Best one-to-one channel per storage axis, and its weakest correlation.
-
-    A colour table drives three different output channels from its three
-    input axes; ramps and pointer arrays explain several axes with one value.
-    """
     best = max(permutations(range(3)), key=lambda p: min(corr[p[a], a] for a in range(3)))
     return best, float(min(corr[best[a], a] for a in range(3)))
 
 
 def _wrap_phase(drops, period, quantile):
-    """Phase at which downward steps line up when folded at `period`, or None.
-
-    A per-phase quantile over the folded rows ignores unrelated bytes and
-    unused pad lanes; the phase must carry most of the remaining drop.
-    """
     rows = len(drops) // period
     if rows < 2:
         return None
@@ -166,12 +132,6 @@ def _wrap_phase(drops, period, quantile):
 
 
 def _row_phases(values, lo, hi, n, layout, pad):
-    """Likely row starts (value index mod row length), from where rows wrap.
-
-    The fastest axis wraps once per row. Only one of a planar table's three
-    planes wraps, so planar tables use a lower quantile. None means the bytes
-    do not repeat at this grid's row length.
-    """
     stride, row, _ = _geometry(n, layout, pad)
     v = values[lo:hi].astype(np.float64)
     quantile = 50 if layout == "interleaved" else 20
@@ -183,11 +143,6 @@ def _row_phases(values, lo, hi, n, layout, pad):
 
 
 def _plane_phase(values, first, r0, r1, n, layout, row):
-    """Row index (mod n) where planes start inside rows r0..r1, or None.
-
-    Between planes the middle axis wraps, so the first node of each row drops
-    once every n rows.
-    """
     lanes = 3 if layout == "interleaved" else 1
     heads = first + np.arange(r0, r1)[:, None] * row + np.arange(lanes)[None, :]
     drops = np.minimum(np.diff(values[heads].astype(np.float64), axis=0), 0).min(axis=1)
@@ -197,7 +152,6 @@ def _plane_phase(values, first, r0, r1, n, layout, row):
 
 
 def _clean_rows(values, first, count, n, stride, span):
-    """Rows without a sharp bend: runs of these can hold a table."""
     w = values[first : first + count * n * stride].astype(np.float64)
     bend = np.abs(np.diff(w.reshape(count, n, stride)[..., :3], 2, axis=1))
     return bend.max(axis=(1, 2)) <= OUTLIER_BEND * span
@@ -224,7 +178,6 @@ def _candidate(values, start, score, n, layout, pad, dtype):
         "structure": round(structure, 3),
         "value_range": [float(full.min()), top],
         "spec": spec.to_dict(),
-        # Red and blue cannot be told apart from structure alone.
         "alternative": {"fastest": alt_fastest, "channels": alt_channels},
         "note": "" if fast_channel in order else "unusual channel order; inspect manually",
     }
@@ -262,7 +215,6 @@ def _search_region(values, lo, hi, n, layout, pad, dtype):
             k = r0 + (plane - r0) % n
             while k + rows_per_table <= r1:
                 start = first + k * row
-                # A few planes cannot show the slow axis's structure; check shape first.
                 preview = _score(_storage(values, start, n, layout, pad, min(n, 4)), structure=False)
                 if acceptable(preview):
                     score = _score(_storage(values, start, n, layout, pad, n))
@@ -296,11 +248,7 @@ def find_luts(data, grids=GRIDS, dtypes=SCAN_DTYPES):
     return _dedupe(hits)
 
 
-# ---------------------------------------------------------------- 1D curves
-
-
 def find_curves(data, dtypes=SCAN_DTYPES, min_len=256):
-    """Long non-decreasing runs: tone curves, gamma tables and similar."""
     hits = []
     for dtype in dtypes:
         dt = np.dtype(DTYPES[dtype])

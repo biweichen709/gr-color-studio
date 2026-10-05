@@ -1,10 +1,3 @@
-"""Fit a 3D LUT from pixel-aligned image pairs (source colour -> target colour).
-
-The LUT is identity plus a correction field. Samples are splatted onto the
-grid with trilinear weights; a smoothness term fills sparsely observed nodes
-and a weak pull keeps unobserved colours close to "no change".
-"""
-
 import numpy as np
 
 from .lut import apply, cell, corners, identity
@@ -38,7 +31,6 @@ def _laplacian(x):
 
 
 def _solve(num, den, lam, eps, iterations=400, tol=1e-9):
-    """Conjugate gradients for (diag(den) + eps + lam * Laplacian) x = num."""
     diag = (den + eps)[..., None]
 
     def operator(x):
@@ -62,7 +54,6 @@ def _solve(num, den, lam, eps, iterations=400, tol=1e-9):
 
 
 def fit_lut(src, dst, grid=33, smooth=1.0, passes=3, max_samples=400_000, seed=0):
-    """Return (lut, info) mapping src colours (K, 3) to dst colours (K, 3), both 0..1."""
     src = np.asarray(src, dtype=np.float64).reshape(-1, 3)
     dst = np.asarray(dst, dtype=np.float64).reshape(-1, 3)
     if src.shape != dst.shape:

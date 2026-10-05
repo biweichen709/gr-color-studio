@@ -25,8 +25,6 @@ HAVE_DISPLAY = os.name == "nt" or bool(os.environ.get("DISPLAY"))
 
 @unittest.skipUnless(HAVE_TK and HAVE_DISPLAY, "needs tkinter and a display")
 class CameraWizard(unittest.TestCase):
-    """Drive the GUI's camera tab against the TTL model, dialogs auto-answered."""
-
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, self.tmp)
@@ -96,7 +94,7 @@ class CameraWizard(unittest.TestCase):
         installed = self.camera_file.read_bytes()
         self.assertEqual(len(installed), len(self.original))
         self.assertNotEqual(installed, self.original)
-        self.assertEqual(installed[: 64 + 17**3 * 6], self.original[: 64 + 17**3 * 6])  # base table untouched
+        self.assertEqual(installed[: 64 + 17**3 * 6], self.original[: 64 + 17**3 * 6])
 
         page.write_restore()
         self.boot_camera()

@@ -1,11 +1,3 @@
-"""Build the one-file desktop app with PyInstaller.
-
-    python -m pip install -r requirements-build.txt
-    python packaging/build.py
-
-On Windows this produces dist/GRColorStudio.exe.
-"""
-
 import subprocess
 import sys
 from pathlib import Path
@@ -23,7 +15,6 @@ def main():
             sys.executable, "-m", "PyInstaller", "--noconfirm", "--onefile", "--windowed",
             "--name", "GRColorStudio", "--icon", str(icon),
             "--collect-all", "rawpy",
-            # ImageTk needs this at runtime but PyInstaller does not detect it.
             "--hidden-import", "PIL._tkinter_finder",
             "--distpath", str(ROOT / "dist"),
             "--workpath", str(build / "pyinstaller"),
