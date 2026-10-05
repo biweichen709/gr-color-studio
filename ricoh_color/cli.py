@@ -5,7 +5,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import codec, color, firmware, fit, lut, remap, safety, scan
+from . import codec, color, firmware, fit, lut, profile, remap, safety, scan
 
 
 def _print_json(data):
@@ -199,6 +199,40 @@ def cmd_factory_entry(args):
         print(f"wrote {name} and DEVELOP.MOD to {args.write}")
 
 
+def cmd_profile(args):
+    data = Path(args.file).read_bytes()
+    payload = firmware.unpack(data) if firmware.is_container(data) else data
+    found = profile.profile_scan(payload, whole_file=args.whole)
+    print(f"mode-name anchors: {len(found['anchors'])}; clusters: {len(found['clusters'])}")
+    for c in found["clusters"]:
+        print(f"  cluster @0x{c['lo']:x}: {', '.join(c['modes'])}")
+    for h in found["ccm"]:
+        near = "firmware" if h["anchor_distance"] is None else f"{h['anchor_distance']}B from a mode name"
+        print(f"CCM  @0x{h['offset']:x}  {h['dtype']}/scale {h['scale']}  x{h['count']}  ({near})  row0 {h['matrix0'][0]}")
+    for h in found["curves"]:
+        print(f"CURVE@0x{h['offset']:x}  {h['dtype']} len {h['length']} x{h['count']} {h['role']}"
+              + ("  [near calibration]" if h["near_calibration"] else ""))
+    for h in found["mode_blocks"]:
+        print(f"BLOCK@0x{h['offset']:x}  stride {h['stride']} x{h['count']}  const {h['constant_frac']} vary {h['varying_frac']}")
+    if not (found["ccm"] or found["curves"] or found["mode_blocks"]):
+        print("no matrix/curve/parameter-block candidates found")
+    if args.out:
+        Path(args.out).write_text(json.dumps(found, indent=2, ensure_ascii=False), encoding="utf-8")
+        print(f"wrote {args.out}")
+
+
+def cmd_diff_backups(args):
+    result = profile.diff_archives(args.archive_a, args.archive_b)
+    if result["changed"]:
+        print("files that CHANGED between the two backups (where that look is stored):")
+        for t in result["changed"]:
+            print(f"  {t}")
+    else:
+        print("no backed-up file changed between the two modes.")
+        print("=> the look is not in any captured file; it is compiled into firmware (not SD-replaceable).")
+    print(f"unchanged: {result['unchanged_count']}; only in one: {len(result['only_in_one'])}")
+
+
 def build_parser():
     p = argparse.ArgumentParser(prog="ricoh_color", description=__doc__)
     sub = p.add_subparsers(dest="command", required=True)
@@ -268,6 +302,17 @@ def build_parser():
     s.add_argument("--write", metavar="DIR", help="write the entry files into DIR (e.g. the SD card root)")
     s.add_argument("--name", help="entry name to write instead of the best candidate")
     s.set_defaults(func=cmd_factory_entry)
+
+    s = sub.add_parser("profile", help="find colour matrices / tone-curve banks / mode blocks (not just 3D LUTs)")
+    s.add_argument("file", help="firmware, decoded payload, or a backed-up .bin")
+    s.add_argument("--whole", action="store_true", help="scan the whole file, not only mode-name windows")
+    s.add_argument("-o", "--output", dest="out", help="write full JSON results here")
+    s.set_defaults(func=cmd_profile)
+
+    s = sub.add_parser("diff-backups", help="byte-compare two backup archives (e.g. Standard vs Vivid)")
+    s.add_argument("archive_a")
+    s.add_argument("archive_b")
+    s.set_defaults(func=cmd_diff_backups)
 
     s = sub.add_parser("firmware-paths", help="list camera file paths referenced by a firmware file, ranked")
     s.add_argument("file", help="official firmware (e.g. fwdc248b.bin) or a decoded payload")

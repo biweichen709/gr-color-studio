@@ -10,7 +10,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import card, codec, firmware, looks, lut, photo, remap, safety, scan
+from . import card, codec, firmware, looks, lut, photo, profile, remap, safety, scan
 
 APP_NAME = "GR 色彩工坊"
 CHECKER = [
@@ -623,6 +623,12 @@ def run_gui():
             self._buttons(f, [("扫描备份文件", self.scan_archive, "Accent.TButton"),
                               ("设为基准表", lambda: self.mark("base")),
                               ("设为替换槽位", lambda: self.mark("slot")), ("近似预览", self.preview_candidate)])
+            self._buttons(f, [("深度分析：矩阵/曲线/参数块…", self.deep_scan),
+                              ("对比两次备份（标准 vs 鲜艳）…", self.compare_backups)])
+            ttk.Label(f, style="PanelMuted.TLabel", wraplength=round(720 * self.app.scale), justify="left",
+                      text="GR III 的色彩可能不是 3D 表，而是色彩矩阵+色调曲线（写在固件里）。「深度分析」在"
+                           "固件或备份里找这些结构；「对比两次备份」是决定性实验：分别在标准和鲜艳模式各备份一次，"
+                           "若没有任何 A: 文件变化，说明色彩写死在固件中、无法用 SD 卡替换。").pack(anchor="w", pady=(8, 0))
             cols = ("file", "offset", "format", "score", "role")
             self.cands = ttk.Treeview(f, columns=cols, show="headings", height=7, style="Flat.Treeview")
             for col, text, width in zip(cols, ("相机文件", "偏移", "格式", "平滑度/结构", "角色"),
@@ -950,6 +956,64 @@ def run_gui():
                 self.say(f"扫描完成：{len(found)} 个候选色彩表。")
 
             self.app.run_task("正在扫描备份文件…", work, done)
+
+        def deep_scan(self):
+            src = filedialog.askopenfilename(
+                title="选择官方固件，或一个备份出的 .bin 文件",
+                filetypes=[("固件或备份", "*.bin *.BIN"), ("所有文件", "*.*")])
+            if not src:
+                return
+
+            def work():
+                data = Path(src).read_bytes()
+                whole = not firmware.is_container(data)
+                payload = firmware.unpack(data) if firmware.is_container(data) else data
+                found = profile.profile_scan(payload, whole_file=whole)
+                found["_src"] = src
+                return found
+
+            def done(found):
+                (self.ws() / "profile.json").write_text(json.dumps(found, indent=2, ensure_ascii=False), encoding="utf-8")
+                self.say(f"深度分析 {Path(found['_src']).name}：模式名锚点 {len(found['anchors'])}，"
+                         f"候选矩阵 {len(found['ccm'])}，曲线组 {len(found['curves'])}，参数块 {len(found['mode_blocks'])}。")
+                for c in found["clusters"][:3]:
+                    self.say(f"  模式名簇 @0x{c['lo']:x}：{'、'.join(c['modes'])}")
+                for h in found["ccm"][:12]:
+                    where = "固件内（不可换）" if h["anchor_distance"] is None else f"距模式名 {h['anchor_distance']} 字节"
+                    self.say(f"  矩阵 @0x{h['offset']:x} {h['dtype']}/比例{h['scale']} ×{h['count']}（{where}）")
+                for h in found["curves"][:12]:
+                    tag = "（近校准，疑似传感器线性化）" if h["near_calibration"] else ""
+                    self.say(f"  曲线组 @0x{h['offset']:x} {h['dtype']} 长{h['length']} ×{h['count']} {h['role']}{tag}")
+                for h in found["mode_blocks"][:5]:
+                    self.say(f"  参数块 @0x{h['offset']:x} 步长{h['stride']} ×{h['count']}")
+                if not (found["ccm"] or found["curves"] or found["mode_blocks"]):
+                    self.say("  没有找到矩阵/曲线/参数块。若扫的是完整固件，基本确认色彩无独立可换结构。")
+                else:
+                    self.say("  完整结果见工作文件夹 profile.json。固件内的命中无法用 SD 卡替换；只有在 A: 文件里的命中才可能替换。")
+
+            self.app.run_task("正在深度分析（矩阵/曲线/参数块）…", work, done)
+
+        def compare_backups(self):
+            a = filedialog.askdirectory(title="选择第一次备份的 archive 文件夹（例如标准模式）")
+            if not a:
+                return
+            b = filedialog.askdirectory(title="选择第二次备份的 archive 文件夹（例如鲜艳模式）")
+            if not b:
+                return
+            try:
+                result = profile.diff_archives(a, b)
+            except (OSError, ValueError, KeyError) as exc:
+                messagebox.showerror(APP_NAME, f"无法对比：{exc}")
+                return
+            if result["changed"]:
+                self.say(f"两次备份有 {len(result['changed'])} 个文件不同（该模式的色彩就存在这些文件里）：")
+                for t in result["changed"]:
+                    self.say(f"  {t}")
+                messagebox.showinfo(APP_NAME, "发现随模式变化的文件，详见日志——这是可替换的候选。")
+            else:
+                self.say("两次备份没有任何文件不同。说明切换模式不改动任何 A: 文件，色彩写死在固件中，SD 卡无法替换。")
+                messagebox.showinfo(APP_NAME, "没有文件随模式变化：色彩写死在固件里，无法用 SD 卡替换。")
+            self.say(f"（相同 {result['unchanged_count']} 个，仅一侧有 {len(result['only_in_one'])} 个）")
 
         def show_candidates(self):
             self.cands.delete(*self.cands.get_children())
