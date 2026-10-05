@@ -136,6 +136,19 @@ class CameraWizard(unittest.TestCase):
         self.assertEqual((self.drives["C"] / "DEVELOP.MOD").read_bytes(), firmware.ENTRY_KEY)
         self.assertTrue(list((self.drives["C"] / "RC_OLD").rglob("DEVELOP.MOD")))
 
+    def test_write_sweep_runs_in_background_without_blocking(self):
+        from ricoh_color import firmware
+
+        self.page.card_path.set(str(self.drives["C"]))
+        self.page.model_id.set("78350")
+        self.page.write_sweep()
+        self.assertTrue(self.app.busy)  # work runs on a worker thread
+        self.wait()
+        self.app.update()
+        self.assertEqual(len(list(self.drives["C"].glob("00078350.*"))), 1000)
+        self.assertEqual((self.drives["C"] / "00078350.500").read_bytes(), firmware.ENTRY_MARKER)
+        self.assertTrue((self.drives["C"] / "DEVELOP.MOD").exists())
+
     def test_style_page_exports_photo_and_cube(self):
         from PIL import Image
 

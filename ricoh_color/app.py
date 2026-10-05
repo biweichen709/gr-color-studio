@@ -792,17 +792,34 @@ def run_gui():
             if target is None or model is None:
                 return
             files = firmware.entry_sweep(model)
-            for m in card.write_files(target, files):
-                self.say(f"卡上原有文件已移到 {m}")
-            self.say(f"已写入 {model:08d}.000～{model:08d}.999 共 1000 个入口候选和 DEVELOP.MOD。"
-                     "关机后按住 MENU 再开机；进入工厂菜单后只把 Script 设为 Enable，然后点「移除批量候选」。")
+
+            def work():
+                return card.write_files(
+                    target, files,
+                    progress=lambda i, n: i % 50 == 0 and self.app.status(f"正在写入候选 {i}/{n}…"))
+
+            def done(moved):
+                for m in moved:
+                    self.say(f"卡上原有文件已移到 {m}")
+                self.say(f"已写入 {model:08d}.000～{model:08d}.999 共 1000 个入口候选和 DEVELOP.MOD。"
+                         "关机后按住 MENU 再开机；进入工厂菜单后只把 Script 设为 Enable，然后点「移除批量候选」。")
+
+            self.app.run_task("正在写入 1000 个候选到 SD 卡（可能需要一会儿）…", work, done)
 
         def remove_sweep(self):
             target, model = self.need_card(), self.sweep_id()
             if target is None or model is None:
                 return
-            removed = card.remove_sweep(target, model, firmware.ENTRY_MARKER)
-            self.say(f"已移除 {removed} 个入口候选（只删除本程序写入、内容未变的文件）。DEVELOP.MOD 保留。")
+
+            def work():
+                return card.remove_sweep(
+                    target, model, firmware.ENTRY_MARKER,
+                    progress=lambda i, n: i % 50 == 0 and self.app.status(f"正在移除候选 {i}/{n}…"))
+
+            def done(removed):
+                self.say(f"已移除 {removed} 个入口候选（只删除本程序写入、内容未变的文件）。DEVELOP.MOD 保留。")
+
+            self.app.run_task("正在移除批量候选…", work, done)
 
         def pick_card(self):
             path = filedialog.askdirectory(title="选择 SD 卡根目录")

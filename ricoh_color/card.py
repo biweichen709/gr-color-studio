@@ -72,22 +72,28 @@ def finish(card, stamp=None):
     return moved[0]
 
 
-def write_files(card, files, stamp=None):
+def write_files(card, files, stamp=None, progress=None):
     card = Path(card)
     stamp = stamp or _timestamp()
     moved = []
-    for name, data in files.items():
+    total = len(files)
+    for i, (name, data) in enumerate(files.items(), 1):
         dst = card / name
         if dst.exists() and dst.read_bytes() != data:
             _move_aside(dst, card, stamp, moved)
         dst.write_bytes(data)
+        if progress:
+            progress(i, total)
     return moved
 
 
-def remove_sweep(card, model_id, marker):
+def remove_sweep(card, model_id, marker, progress=None):
+    candidates = list(Path(card).glob(f"{model_id:08d}.*"))
     removed = 0
-    for path in Path(card).glob(f"{model_id:08d}.*"):
+    for i, path in enumerate(candidates, 1):
         if len(path.suffix) == 4 and path.suffix[1:].isdigit() and path.read_bytes() == marker:
             path.unlink()
             removed += 1
+        if progress:
+            progress(i, len(candidates))
     return removed
