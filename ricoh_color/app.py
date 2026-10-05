@@ -87,15 +87,120 @@ def default_workspace():
     return Path.home() / "Documents" / "GR色彩工坊"
 
 
+def config_path():
+    return Path.home() / ".grcolorstudio.json"
+
+
+def load_config():
+    try:
+        return json.loads(config_path().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def save_config(cfg):
+    try:
+        config_path().write_text(json.dumps(cfg, indent=2, ensure_ascii=False), encoding="utf-8")
+    except OSError:
+        pass
+
+
 def run_gui():
     import tkinter as tk
-    from tkinter import filedialog, messagebox, ttk
+    from tkinter import filedialog, font, messagebox, ttk
 
     from PIL import Image, ImageTk
 
+    try:
+        from tkinterdnd2 import DND_FILES, TkinterDnD
+
+        BaseTk = TkinterDnD.Tk
+        HAS_DND = True
+    except Exception:
+        BaseTk = tk.Tk
+        HAS_DND = False
+
+    P = {
+        "bg": "#17181c", "panel": "#212329", "panel2": "#2a2d34", "entry": "#1b1d22",
+        "fg": "#e7e8ea", "muted": "#9298a2", "accent": "#5b9dd9",
+        "accent2": "#6fb0e8", "border": "#383b43", "danger": "#e2756f", "ok": "#67c08a",
+        "canvas": "#121318",
+    }
+    FAMILY = "Microsoft YaHei UI" if os.name == "nt" else "sans-serif"
+
+    def apply_theme(root, style, scale):
+        style.theme_use("clam")
+        root.configure(bg=P["bg"])
+        base = round(10 * scale)
+        for name in ("TkDefaultFont", "TkTextFont", "TkMenuFont", "TkHeadingFont", "TkIconFont"):
+            try:
+                font.nametofont(name).configure(family=FAMILY, size=base)
+            except tk.TclError:
+                pass
+        row = round(46 * scale)
+        style.configure(".", background=P["panel"], foreground=P["fg"], fieldbackground=P["entry"],
+                        bordercolor=P["border"], lightcolor=P["panel"], darkcolor=P["panel"],
+                        troughcolor=P["panel2"], arrowcolor=P["fg"], insertcolor=P["fg"], focuscolor=P["panel"])
+        style.configure("TFrame", background=P["bg"])
+        style.configure("Panel.TFrame", background=P["panel"])
+        style.configure("Card.TFrame", background=P["panel"], relief="flat")
+        style.configure("TLabel", background=P["bg"], foreground=P["fg"])
+        style.configure("Panel.TLabel", background=P["panel"], foreground=P["fg"])
+        style.configure("Muted.TLabel", background=P["bg"], foreground=P["muted"])
+        style.configure("PanelMuted.TLabel", background=P["panel"], foreground=P["muted"])
+        style.configure("Danger.TLabel", background=P["panel"], foreground=P["danger"])
+        style.configure("Title.TLabel", background=P["panel"], foreground=P["fg"],
+                        font=(FAMILY, round(13 * scale), "bold"))
+        style.configure("TButton", background=P["panel2"], foreground=P["fg"], borderwidth=0,
+                        focusthickness=0, padding=(round(12 * scale), round(7 * scale)))
+        style.map("TButton", background=[("pressed", P["accent"]), ("active", P["border"])],
+                  foreground=[("disabled", P["muted"])])
+        style.configure("Accent.TButton", background=P["accent"], foreground="#ffffff")
+        style.map("Accent.TButton", background=[("pressed", P["accent"]), ("active", P["accent2"])])
+        style.configure("Nav.TButton", background=P["panel"], foreground=P["muted"], anchor="w",
+                        borderwidth=0, padding=(round(14 * scale), round(10 * scale)))
+        style.map("Nav.TButton", background=[("active", P["panel2"])], foreground=[("active", P["fg"])])
+        style.configure("NavOn.TButton", background=P["panel2"], foreground=P["fg"], anchor="w",
+                        borderwidth=0, padding=(round(14 * scale), round(10 * scale)))
+        style.map("NavOn.TButton", background=[("active", P["panel2"])])
+        style.configure("TNotebook", background=P["bg"], borderwidth=0, tabmargins=(round(10 * scale), round(8 * scale), 0, 0))
+        style.configure("TNotebook.Tab", background=P["bg"], foreground=P["muted"],
+                        padding=(round(18 * scale), round(8 * scale)), borderwidth=0)
+        style.map("TNotebook.Tab", background=[("selected", P["panel"])], foreground=[("selected", P["fg"])])
+        style.configure("Treeview", background=P["panel2"], fieldbackground=P["panel2"], foreground=P["fg"],
+                        borderwidth=0, rowheight=row)
+        style.configure("Treeview.Heading", background=P["panel"], foreground=P["muted"], borderwidth=0,
+                        padding=round(4 * scale))
+        style.map("Treeview.Heading", background=[("active", P["panel"])])
+        style.map("Treeview", background=[("selected", P["accent"])], foreground=[("selected", "#ffffff")])
+        style.configure("Flat.Treeview", rowheight=round(22 * scale))
+        for s in ("TEntry", "TCombobox", "TSpinbox"):
+            style.configure(s, foreground=P["fg"], fieldbackground=P["entry"], background=P["panel2"],
+                            arrowcolor=P["fg"], borderwidth=0, padding=round(4 * scale))
+        style.map("TCombobox", fieldbackground=[("readonly", P["entry"])], foreground=[("readonly", P["fg"])])
+        style.configure("TScale", background=P["panel"], troughcolor=P["entry"])
+        style.configure("Horizontal.TScale", background=P["panel"])
+        style.configure("TScrollbar", background=P["panel2"], troughcolor=P["bg"], borderwidth=0, arrowcolor=P["muted"])
+        style.configure("TLabelframe", background=P["panel"], bordercolor=P["border"])
+        style.configure("TLabelframe.Label", background=P["panel"], foreground=P["muted"])
+        style.configure("TRadiobutton", background=P["bg"], foreground=P["fg"])
+        style.map("TRadiobutton", foreground=[("active", P["accent"])])
+        style.configure("Pill.TRadiobutton", background=P["panel"], foreground=P["muted"])
+        return row
+
+    def thumb_source():
+        h, w = 54, 84
+        x = np.linspace(0, 1, w)[None, :, None]
+        img = np.empty((h, w, 3))
+        img[:18] = np.array([0.42, 0.58, 0.82]) + x * np.array([0.08, 0.06, -0.06])
+        img[18:36] = np.array([0.88, 0.68, 0.57]) - x * np.array([0.14, 0.08, 0.05])
+        img[36:48] = np.array([0.26, 0.42, 0.2]) + x * np.array([0.22, 0.2, 0.12])
+        img[48:] = np.linspace(0.05, 0.95, w)[None, :, None]
+        return np.clip(img, 0, 1)
+
     class StylePage(ttk.Frame):
         def __init__(self, app, master):
-            super().__init__(master, padding=8)
+            super().__init__(master, padding=10)
             self.app = app
             self.sources = {}
             self.source_names = {}
@@ -106,6 +211,10 @@ def run_gui():
             self.pending = None
             self.cancel = threading.Event()
             self._image = None
+            self.thumbs = {}
+            self.thumb_src = thumb_source()
+            self.split = 0.5
+            self._rect = None
             self.mode = tk.StringVar(value="split")
             self.grid_size = tk.StringVar(value="65")
             self.columnconfigure(1, weight=1)
@@ -116,63 +225,84 @@ def run_gui():
             self.tree.selection_set(first)
             self.tree.see(first)
 
+        def _thumb(self, table):
+            img = photo.apply_lut(table, np.rint(self.thumb_src * 255).astype(np.uint8))
+            w = round(60 * self.app.scale)
+            im = Image.fromarray(img).resize((w, round(w * 54 / 84)), Image.LANCZOS)
+            return ImageTk.PhotoImage(im)
+
         def _build_left(self):
-            left = ttk.Frame(self)
-            left.grid(row=0, column=0, sticky="ns", padx=(0, 8))
+            left = ttk.Frame(self, style="Panel.TFrame", padding=10)
+            left.grid(row=0, column=0, sticky="ns", padx=(0, 10))
             left.rowconfigure(0, weight=1)
-            self.tree = ttk.Treeview(left, show="tree", selectmode="browse", height=18)
-            self.tree.column("#0", width=250)
+            width = round(286 * self.app.scale)
+            self.tree = ttk.Treeview(left, show="tree", selectmode="browse", height=12)
+            self.tree.column("#0", width=width)
             self.tree.grid(row=0, column=0, columnspan=3, sticky="nsew")
             groups = {}
             for look in looks.PRESETS:
                 if look.group not in groups:
-                    groups[look.group] = self.tree.insert("", "end", text=look.group, open=True)
-                self.tree.insert(groups[look.group], "end", iid=look.key, text=look.name)
+                    groups[look.group] = self.tree.insert("", "end", text=f"  {look.group}", open=True)
+                thumb = self._thumb(looks.bake(look, grid=17))
+                self.thumbs[look.key] = thumb
+                self.tree.insert(groups[look.group], "end", iid=look.key, text=f"  {look.name}", image=thumb)
                 self.sources[look.key] = look
                 self.source_names[look.key] = f"{look.group} · {look.name}"
             self.cube_group = None
             self.tree.bind("<<TreeviewSelect>>", lambda e: self._on_select())
-            self.note = ttk.Label(left, wraplength=250, foreground="#555")
-            self.note.grid(row=1, column=0, columnspan=3, sticky="w", pady=(6, 6))
+            self.note = ttk.Label(left, wraplength=width, style="PanelMuted.TLabel")
+            self.note.grid(row=1, column=0, columnspan=3, sticky="w", pady=(8, 8))
 
             for row, (key, label, lo, hi, default) in enumerate(SLIDERS, start=2):
-                ttk.Label(left, text=label).grid(row=row, column=0, sticky="w")
+                ttk.Label(left, text=label, style="Panel.TLabel").grid(row=row, column=0, sticky="w", pady=2)
                 var = tk.IntVar(value=default)
                 self.vars[key] = var
-                scale = ttk.Scale(left, from_=lo, to=hi, variable=var, length=170,
+                scale = ttk.Scale(left, from_=lo, to=hi, variable=var, length=round(168 * self.app.scale),
                                   command=lambda v, var=var: (var.set(round(float(v))), self.schedule()))
-                scale.grid(row=row, column=1, sticky="ew")
-                ttk.Label(left, textvariable=var, width=4, anchor="e").grid(row=row, column=2, sticky="e")
-            buttons = ttk.Frame(left)
-            buttons.grid(row=20, column=0, columnspan=3, sticky="ew", pady=(8, 0))
+                scale.grid(row=row, column=1, sticky="ew", padx=6)
+                ttk.Label(left, textvariable=var, width=4, anchor="e", style="PanelMuted.TLabel").grid(row=row, column=2, sticky="e")
+            left.columnconfigure(1, weight=1)
+
+            buttons = ttk.Frame(left, style="Panel.TFrame")
+            buttons.grid(row=20, column=0, columnspan=3, sticky="ew", pady=(10, 0))
             buttons.columnconfigure((0, 1), weight=1)
             items = [
-                ("重置微调", self.reset), ("打开照片…", self.open_photo),
-                ("导出照片…", self.export_photo), ("批量处理文件夹…", self.batch),
-                ("导出 .cube…", self.export_cube), ("导入 .cube…", self.import_cube),
+                ("打开照片…", self.open_photo, "Accent.TButton"), ("重置微调", self.reset, "TButton"),
+                ("导出照片…", self.export_photo, "TButton"), ("批量处理…", self.batch, "TButton"),
+                ("导出 .cube…", self.export_cube, "TButton"), ("导入 .cube…", self.import_cube, "TButton"),
             ]
-            for k, (text, cmd) in enumerate(items):
-                ttk.Button(buttons, text=text, command=cmd).grid(row=k // 2, column=k % 2, sticky="ew", padx=2, pady=2)
-            size = ttk.Frame(left)
-            size.grid(row=21, column=0, columnspan=3, sticky="w", pady=(4, 0))
-            ttk.Label(size, text="导出 .cube 精度").pack(side="left")
-            ttk.Combobox(size, textvariable=self.grid_size, values=("33", "65"), width=5, state="readonly").pack(side="left", padx=4)
+            for k, (text, cmd, st) in enumerate(items):
+                ttk.Button(buttons, text=text, command=cmd, style=st).grid(row=k // 2, column=k % 2, sticky="ew", padx=2, pady=2)
+            size = ttk.Frame(left, style="Panel.TFrame")
+            size.grid(row=21, column=0, columnspan=3, sticky="w", pady=(6, 0))
+            ttk.Label(size, text="导出精度", style="PanelMuted.TLabel").pack(side="left")
+            ttk.Combobox(size, textvariable=self.grid_size, values=("33", "65"), width=5, state="readonly").pack(side="left", padx=6)
 
         def _build_right(self):
-            right = ttk.Frame(self)
+            right = ttk.Frame(self, style="Panel.TFrame", padding=10)
             right.grid(row=0, column=1, sticky="nsew")
             right.rowconfigure(1, weight=1)
             right.columnconfigure(0, weight=1)
-            bar = ttk.Frame(right)
+            bar = ttk.Frame(right, style="Panel.TFrame")
             bar.grid(row=0, column=0, sticky="ew")
-            for text, value in (("效果", "after"), ("原图", "before"), ("左右对比", "split")):
-                ttk.Radiobutton(bar, text=text, value=value, variable=self.mode, command=self.show).pack(side="left", padx=4)
-            self.caption = ttk.Label(bar, text="内置色卡（打开照片后显示照片）", foreground="#555")
+            for text, value in (("左右对比", "split"), ("效果", "after"), ("原图", "before")):
+                ttk.Radiobutton(bar, text=text, value=value, variable=self.mode, command=self.show,
+                                style="Pill.TRadiobutton").pack(side="left", padx=(0, 10))
+            self.caption = ttk.Label(bar, text="内置样图 · 打开照片后在此预览", style="PanelMuted.TLabel")
             self.caption.pack(side="right")
-            self.canvas = tk.Canvas(right, background="#2b2b2b", highlightthickness=0)
-            self.canvas.grid(row=1, column=0, sticky="nsew", pady=(6, 0))
+            self.canvas = tk.Canvas(right, background=P["canvas"], highlightthickness=0, bd=0)
+            self.canvas.grid(row=1, column=0, sticky="nsew", pady=(8, 0))
             self.canvas.bind("<Configure>", lambda e: self.show())
+            self.canvas.bind("<Button-1>", self.on_drag)
+            self.canvas.bind("<B1-Motion>", self.on_drag)
 
+        def on_drag(self, event):
+            if self.mode.get() != "split" or not self._rect:
+                return
+            ox, oy, iw, ih = self._rect
+            if iw:
+                self.split = min(1.0, max(0.0, (event.x - ox) / iw))
+                self.show()
 
         def source(self):
             selection = self.tree.selection()
@@ -193,7 +323,6 @@ def run_gui():
             name = self.source()[1]
             return name if self.adjust().is_neutral() else f"{name}（已微调）"
 
-
         def _on_select(self):
             selection = self.tree.selection()
             if not selection or selection[0] not in self.sources:
@@ -213,7 +342,7 @@ def run_gui():
             self.show()
 
         def show(self):
-            w, h = max(self.canvas.winfo_width(), 50), max(self.canvas.winfo_height(), 50)
+            cw, ch = max(self.canvas.winfo_width(), 50), max(self.canvas.winfo_height(), 50)
             mode = self.mode.get()
             if mode == "before":
                 img = self.before
@@ -221,40 +350,52 @@ def run_gui():
                 img = self.graded
             else:
                 img = self.graded.copy()
-                half = img.shape[1] // 2
+                half = int(img.shape[1] * self.split)
                 img[:, :half] = self.before[:, :half]
-                img[:, half : half + 2] = 255
             im = Image.fromarray(img)
-            im.thumbnail((w, h), Image.LANCZOS)
+            im.thumbnail((cw, ch), Image.LANCZOS)
+            iw, ih = im.size
+            ox, oy = (cw - iw) // 2, (ch - ih) // 2
             self._image = ImageTk.PhotoImage(im)
             self.canvas.delete("all")
-            self.canvas.create_image(w // 2, h // 2, image=self._image)
+            self.canvas.create_image(ox, oy, image=self._image, anchor="nw")
+            self._rect = (ox, oy, iw, ih)
             if mode == "split":
-                self.canvas.create_text(w // 2 - 8, 14, text="原图", fill="white", anchor="e")
-                self.canvas.create_text(w // 2 + 8, 14, text="效果", fill="white", anchor="w")
+                x = ox + int(iw * self.split)
+                self.canvas.create_line(x, oy, x, oy + ih, fill=P["accent"], width=2)
+                cy = oy + ih // 2
+                self.canvas.create_oval(x - 7, cy - 7, x + 7, cy + 7, fill=P["accent"], outline="#ffffff")
+                self.canvas.create_text(ox + 8, oy + 14, text="原图", fill="#ffffff", anchor="w")
+                self.canvas.create_text(ox + iw - 8, oy + 14, text="效果", fill="#ffffff", anchor="e")
+                self.canvas.configure(cursor="sb_h_double_arrow")
+            else:
+                self.canvas.configure(cursor="")
 
         def reset(self):
             for key, _, _, _, default in SLIDERS:
                 self.vars[key].set(default)
             self.schedule()
 
-
-        def open_photo(self):
-            exts = " ".join(f"*{e} *{e.upper()}" for e in sorted(photo.IMAGE_EXTENSIONS | photo.RAW_EXTENSIONS))
-            path = filedialog.askopenfilename(title="打开照片", filetypes=[("照片", exts), ("所有文件", "*.*")])
-            if not path:
-                return
-
+        def load_path(self, path):
             def work():
                 return photo.load(path)
 
             def done(p):
                 self.photo = p
                 self.before = p.preview(1400)
-                self.caption.configure(text=f"{Path(path).name}  {p.pixels.shape[1]}×{p.pixels.shape[0]}")
+                self.app.config["last_photo_dir"] = str(Path(path).parent)
+                save_config(self.app.config)
+                self.caption.configure(text=f"{Path(path).name}  ·  {p.pixels.shape[1]}×{p.pixels.shape[0]}")
                 self.refresh()
 
             self.app.run_task(f"正在读取 {Path(path).name}…", work, done)
+
+        def open_photo(self):
+            exts = " ".join(f"*{e} *{e.upper()}" for e in sorted(photo.IMAGE_EXTENSIONS | photo.RAW_EXTENSIONS))
+            path = filedialog.askopenfilename(title="打开照片", initialdir=self.app.config.get("last_photo_dir", ""),
+                                              filetypes=[("照片", exts), ("所有文件", "*.*")])
+            if path:
+                self.load_path(path)
 
         def export_photo(self):
             if self.photo is None:
@@ -265,7 +406,7 @@ def run_gui():
             suffix = src_key.key if isinstance(src_key, looks.Look) else "lut"
             path = filedialog.asksaveasfilename(
                 title="导出照片", defaultextension=".jpg", initialfile=f"{stem}_{suffix}.jpg",
-                filetypes=[("JPEG", "*.jpg")],
+                initialdir=self.app.config.get("last_photo_dir", ""), filetypes=[("JPEG", "*.jpg")],
             )
             if not path:
                 return
@@ -279,16 +420,19 @@ def run_gui():
             self.app.run_task("正在导出照片…", work, lambda p: self.app.status(f"已导出 {p}"))
 
         def batch(self):
-            folder = filedialog.askdirectory(title="选择要处理的照片文件夹")
+            folder = filedialog.askdirectory(title="选择要处理的照片文件夹",
+                                             initialdir=self.app.config.get("last_batch_dir", ""))
             if not folder:
                 return
+            self.app.config["last_batch_dir"] = folder
+            save_config(self.app.config)
             files = sorted(p for p in Path(folder).iterdir() if p.is_file() and photo.is_supported(p))
             if not files:
                 messagebox.showinfo(APP_NAME, "该文件夹中没有支持的照片。")
                 return
             src = self.source()[0]
             name = src.key if isinstance(src, looks.Look) else "lut"
-            out_dir = Path(folder) / f"GR色彩工坊_{name}"
+            out_dir = Path(folder) / f"GRColorStudio_{name}"
             if not messagebox.askokcancel(APP_NAME, f"将处理 {len(files)} 个文件，输出到：\n{out_dir}"):
                 return
             out_dir.mkdir(exist_ok=True)
@@ -322,7 +466,7 @@ def run_gui():
             name = src.key if isinstance(src, looks.Look) else "custom"
             path = filedialog.asksaveasfilename(
                 title="导出 .cube", defaultextension=".cube", initialfile=f"{name}.cube",
-                filetypes=[("Cube LUT", "*.cube")],
+                initialdir=self.app.config.get("last_photo_dir", ""), filetypes=[("Cube LUT", "*.cube")],
             )
             if path:
                 title = name if self.adjust().is_neutral() else f"{name}-adjusted"
@@ -330,7 +474,8 @@ def run_gui():
                 self.app.status(f"已导出 {path}")
 
         def import_cube(self):
-            path = filedialog.askopenfilename(title="导入 .cube", filetypes=[("Cube LUT", "*.cube")])
+            path = filedialog.askopenfilename(title="导入 .cube", filetypes=[("Cube LUT", "*.cube")],
+                                              initialdir=self.app.config.get("last_photo_dir", ""))
             if not path:
                 return
             try:
@@ -339,18 +484,22 @@ def run_gui():
                 messagebox.showerror(APP_NAME, f"无法读取：{exc}")
                 return
             if self.cube_group is None:
-                self.cube_group = self.tree.insert("", "end", text="导入的 .cube", open=True)
+                self.cube_group = self.tree.insert("", "end", text="  导入的 .cube", open=True)
             key = f"cube:{path}"
+            thumb = self._thumb(lut.resample(table, 17))
+            self.thumbs[key] = thumb
             if key not in self.sources:
-                self.tree.insert(self.cube_group, "end", iid=key, text=Path(path).stem)
+                self.tree.insert(self.cube_group, "end", iid=key, text=f"  {Path(path).stem}", image=thumb)
             self.sources[key] = table
             self.source_names[key] = f"导入 · {Path(path).stem}"
             self.tree.selection_set(key)
             self.tree.see(key)
 
+    STEP_TITLES = ["0 · 准备", "1 · 备份", "2 · 定位色彩表", "3 · 写入风格", "4 · 恢复原厂", "5 · 收尾"]
+
     class CameraPage(ttk.Frame):
         def __init__(self, app, master):
-            super().__init__(master)
+            super().__init__(master, padding=10)
             self.app = app
             self.workspace = tk.StringVar(value=str(default_workspace()))
             self.card_path = tk.StringVar()
@@ -358,102 +507,166 @@ def run_gui():
             self.entry_choice = tk.StringVar(value=next(iter(firmware.KNOWN_ENTRIES)))
             self.model_id = tk.StringVar(value=str(firmware.GR3_MODEL_ID))
             self.data = {}
-            canvas = tk.Canvas(self, highlightthickness=0)
-            bar = ttk.Scrollbar(self, orient="vertical", command=canvas.yview)
-            self.body = ttk.Frame(canvas, padding=10)
-            self.body.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-            window = canvas.create_window((0, 0), window=self.body, anchor="nw")
-            canvas.bind("<Configure>", lambda e: canvas.itemconfigure(window, width=e.width))
-            canvas.configure(yscrollcommand=bar.set)
-            canvas.pack(side="left", fill="both", expand=True)
-            bar.pack(side="right", fill="y")
-            wheel = lambda e: canvas.yview_scroll(-1 if e.delta > 0 or e.num == 4 else 1, "units")
-            canvas.bind("<Enter>", lambda e: [canvas.bind_all(k, wheel) for k in ("<MouseWheel>", "<Button-4>", "<Button-5>")])
-            canvas.bind("<Leave>", lambda e: [canvas.unbind_all(k) for k in ("<MouseWheel>", "<Button-4>", "<Button-5>")])
-            self.body.columnconfigure(0, weight=1)
+            self.steps = {}
+            self.nav_buttons = {}
+            self.current = 0
+            self.rowconfigure(1, weight=1)
+            self.columnconfigure(1, weight=1)
             self._build()
             self.load_state()
+            self.show_step(0)
 
+        def _intro(self, parent, text):
+            ttk.Label(parent, text=text, wraplength=round(720 * self.app.scale), justify="left",
+                      style="PanelMuted.TLabel").pack(anchor="w", pady=(0, 10))
 
-        def _step(self, row, title, text):
-            frame = ttk.LabelFrame(self.body, text=title, padding=8)
-            frame.grid(row=row, column=0, sticky="ew", pady=4)
-            frame.columnconfigure(1, weight=1)
-            ttk.Label(frame, text=text, wraplength=820, justify="left").grid(row=0, column=0, columnspan=4, sticky="w")
-            return frame
-
-        def _buttons(self, frame, row, items):
-            bar = ttk.Frame(frame)
-            bar.grid(row=row, column=0, columnspan=4, sticky="w", pady=(4, 0))
-            for text, command in items:
-                ttk.Button(bar, text=text, command=command).pack(side="left", padx=(0, 6))
-            return bar
+        def _buttons(self, parent, items):
+            bar = ttk.Frame(parent, style="Panel.TFrame")
+            bar.pack(anchor="w", pady=(2, 0))
+            widgets = []
+            for text, command, *rest in items:
+                st = rest[0] if rest else "TButton"
+                b = ttk.Button(bar, text=text, command=command, style=st)
+                b.pack(side="left", padx=(0, 8))
+                widgets.append(b)
+            return bar, widgets
 
         def _build(self):
-            warn = ttk.Label(
-                self.body, foreground="#b00020", wraplength=840, justify="left",
-                text="实验功能：相机脚本只在电脑端模拟验证，尚未在真机上运行。第一次请只做「1. 备份」，"
-                     "确认结果后再继续。不刷固件，只做文件级备份/替换/恢复；风险自负。",
-            )
-            warn.grid(row=0, column=0, sticky="w", pady=(0, 6))
+            ttk.Label(self, style="Danger.TLabel", wraplength=round(980 * self.app.scale), justify="left",
+                      text="实验功能：相机脚本只在电脑端模拟验证，尚未在真机上运行。第一次请只做「1 备份」，"
+                           "确认结果后再继续。不刷固件，只做文件级备份 / 替换 / 恢复；风险自负。"
+                      ).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 10))
 
-            f = self._step(1, "0. 准备", "工作文件夹保存备份原件和每一步的记录，请妥善保管。SD 卡请用 FAT32 格式，"
-                                       "并用下方按钮写入工厂菜单入口文件，进入工厂菜单后只把 Script 设为 Enable。")
-            ttk.Label(f, text="工作文件夹").grid(row=1, column=0, sticky="w")
-            ttk.Entry(f, textvariable=self.workspace).grid(row=1, column=1, sticky="ew", padx=4)
-            ttk.Button(f, text="选择…", command=self.pick_workspace).grid(row=1, column=2)
-            ttk.Label(f, text="SD 卡根目录").grid(row=2, column=0, sticky="w")
-            ttk.Entry(f, textvariable=self.card_path).grid(row=2, column=1, sticky="ew", padx=4)
-            ttk.Button(f, text="选择…", command=self.pick_card).grid(row=2, column=2)
-            ttk.Label(f, text="工厂菜单入口").grid(row=3, column=0, sticky="w")
-            self.entry_box = ttk.Combobox(f, textvariable=self.entry_choice, values=self.entry_options(), state="readonly")
-            self.entry_box.grid(row=3, column=1, sticky="ew", padx=4)
-            self._buttons(f, 4, [("从固件查找入口…", self.find_entry), ("写入入口文件到 SD 卡", self.write_entry)])
-            sweep = self._buttons(f, 6, [("批量写入 1000 个候选", self.write_sweep), ("移除批量候选", self.remove_sweep)])
-            ttk.Label(sweep, text="机型编号").pack(side="left", padx=(12, 4))
-            ttk.Entry(sweep, textvariable=self.model_id, width=8).pack(side="left")
-            ttk.Label(sweep, foreground="#555", text="GR III 默认 78350（0x1320E）；入口名 = 机型编号 8 位 . 000~999").pack(side="left", padx=6)
-            ttk.Label(f, foreground="#555", wraplength=820, justify="left",
-                      text="写入后：关机 → 按住 MENU 不放再按电源键 → 进入工厂菜单后只把 Script 设为 Enable。机型或固件版本不在列表中时，先用「从固件查找入口」。").grid(row=5, column=0, columnspan=4, sticky="w")
+            nav = ttk.Frame(self, style="Panel.TFrame", padding=6)
+            nav.grid(row=1, column=0, sticky="ns", padx=(0, 10))
+            for i, title in enumerate(STEP_TITLES):
+                b = ttk.Button(nav, text=title, style="Nav.TButton", width=14,
+                               command=lambda i=i: self.show_step(i))
+                b.pack(fill="x", pady=1)
+                self.nav_buttons[i] = b
 
-            f = self._step(2, "1. 备份（只读相机，只写 SD 卡）",
-                           "每行一个要备份的相机路径（A:\\... 或 E:\\...）。可用命令行 strings 工具从解包固件中找候选路径。"
-                           "写入后：取出 SD 卡 → 插入相机 → 正常开机一次并等待约 10 秒 → 关机 → 卡插回电脑 → 点「校验备份」。")
-            self.paths = tk.Text(f, height=4, width=80)
-            self.paths.grid(row=1, column=0, columnspan=4, sticky="ew", pady=4)
-            self._buttons(f, 2, [("从官方固件提取候选路径…", self.paths_from_firmware), ("生成备份脚本并写入 SD 卡", self.write_backup), ("校验备份并归档", self.verify_backup)])
+            self.content = ttk.Frame(self, style="Card.TFrame")
+            self.content.grid(row=1, column=1, sticky="nsew")
+            self.content.rowconfigure(0, weight=1)
+            self.content.columnconfigure(0, weight=1)
+            for i in range(len(STEP_TITLES)):
+                fr = ttk.Frame(self.content, style="Panel.TFrame", padding=14)
+                fr.grid(row=0, column=0, sticky="nsew")
+                self.steps[i] = fr
+            self._build_step0(self.steps[0])
+            self._build_step1(self.steps[1])
+            self._build_step2(self.steps[2])
+            self._build_step3(self.steps[3])
+            self._build_step4(self.steps[4])
+            self._build_step5(self.steps[5])
 
-            f = self._step(3, "2. 定位色彩表",
-                           "扫描已归档的原件，列出疑似 3D 色彩表。选中一行后分别设为「基准表」（例如 Standard）"
+            logwrap = ttk.Frame(self, style="Panel.TFrame", padding=(10, 6))
+            logwrap.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(10, 0))
+            logwrap.columnconfigure(0, weight=1)
+            ttk.Label(logwrap, text="日志", style="PanelMuted.TLabel").grid(row=0, column=0, sticky="w")
+            self.log = tk.Text(logwrap, height=8, bg=P["entry"], fg=P["fg"], insertbackground=P["fg"],
+                               relief="flat", bd=0, highlightthickness=0, wrap="word", state="disabled")
+            self.log.grid(row=1, column=0, sticky="ew")
+            sb = ttk.Scrollbar(logwrap, orient="vertical", command=self.log.yview)
+            sb.grid(row=1, column=1, sticky="ns")
+            self.log.configure(yscrollcommand=sb.set)
+
+        def _title(self, parent, i):
+            ttk.Label(parent, text=STEP_TITLES[i].split(" · ")[1], style="Title.TLabel").pack(anchor="w", pady=(0, 8))
+
+        def _build_step0(self, f):
+            self._title(f, 0)
+            self._intro(f, "工作文件夹保存备份原件和每一步的记录，请妥善保管。SD 卡请用 FAT32 格式。"
+                           "用下方按钮把工厂菜单入口文件写到卡上，进入工厂菜单后只把 Script 设为 Enable。")
+            grid = ttk.Frame(f, style="Panel.TFrame")
+            grid.pack(fill="x")
+            grid.columnconfigure(1, weight=1)
+            ttk.Label(grid, text="工作文件夹", style="Panel.TLabel").grid(row=0, column=0, sticky="w", pady=3)
+            ttk.Entry(grid, textvariable=self.workspace).grid(row=0, column=1, sticky="ew", padx=6)
+            ttk.Button(grid, text="选择…", command=self.pick_workspace).grid(row=0, column=2)
+            ttk.Label(grid, text="SD 卡根目录", style="Panel.TLabel").grid(row=1, column=0, sticky="w", pady=3)
+            ttk.Entry(grid, textvariable=self.card_path).grid(row=1, column=1, sticky="ew", padx=6)
+            ttk.Button(grid, text="选择…", command=self.pick_card).grid(row=1, column=2)
+            ttk.Label(grid, text="工厂菜单入口", style="Panel.TLabel").grid(row=2, column=0, sticky="w", pady=3)
+            self.entry_box = ttk.Combobox(grid, textvariable=self.entry_choice, values=self.entry_options(), state="readonly")
+            self.entry_box.grid(row=2, column=1, columnspan=2, sticky="ew", padx=6)
+
+            ttk.Separator(f, orient="horizontal").pack(fill="x", pady=10)
+            ttk.Label(f, text="已知机型：直接选择入口并写入", style="PanelMuted.TLabel").pack(anchor="w")
+            self._buttons(f, [("从固件查找入口…", self.find_entry), ("写入入口文件到 SD 卡", self.write_entry, "Accent.TButton")])
+            ttk.Label(f, text="未知机型（如 GR III）：写入 1000 个候选，相机会自己挑中正确的那个",
+                      style="PanelMuted.TLabel").pack(anchor="w", pady=(12, 0))
+            _, _ = self._buttons(f, [("批量写入 1000 个候选", self.write_sweep, "Accent.TButton"), ("移除批量候选", self.remove_sweep)])
+            mid = ttk.Frame(f, style="Panel.TFrame")
+            mid.pack(anchor="w", pady=(6, 0))
+            ttk.Label(mid, text="机型编号", style="Panel.TLabel").pack(side="left", padx=(0, 6))
+            ttk.Entry(mid, textvariable=self.model_id, width=10).pack(side="left")
+            ttk.Label(mid, text="GR III 默认 78350（0x1320E）", style="PanelMuted.TLabel").pack(side="left", padx=8)
+            ttk.Label(f, text="写入后：关机 → 按住 MENU 不放再按电源键 → 进入工厂菜单只把 Script 设为 Enable。",
+                      style="PanelMuted.TLabel", wraplength=round(720 * self.app.scale), justify="left").pack(anchor="w", pady=(12, 0))
+
+        def _build_step1(self, f):
+            self._title(f, 1)
+            self._intro(f, "每行一个要备份的相机路径（A:\\… 或 E:\\…）。可用「从官方固件提取候选路径」自动填入。"
+                           "写入后：取出 SD 卡 → 插入相机 → 正常开机一次等约 10 秒 → 关机 → 卡插回电脑 → 点「校验备份」。")
+            self.paths = tk.Text(f, height=5, bg=P["entry"], fg=P["fg"], insertbackground=P["fg"],
+                                 relief="flat", bd=0, highlightthickness=0, wrap="none")
+            self.paths.pack(fill="x", pady=(0, 8))
+            self._buttons(f, [("从官方固件提取候选路径…", self.paths_from_firmware),
+                              ("生成备份脚本并写入 SD 卡", self.write_backup, "Accent.TButton"),
+                              ("校验备份并归档", self.verify_backup)])
+
+        def _build_step2(self, f):
+            self._title(f, 2)
+            self._intro(f, "扫描已归档的原件，列出疑似 3D 色彩表。选中一行后分别设为「基准表」（例如 Standard）"
                            "和「替换槽位」（要被你的风格替换的那个影像风格）。")
-            self._buttons(f, 1, [
-                ("扫描备份文件", self.scan_archive), ("设为基准表", lambda: self.mark("base")),
-                ("设为替换槽位", lambda: self.mark("slot")), ("近似预览", self.preview_candidate),
-            ])
+            self._buttons(f, [("扫描备份文件", self.scan_archive, "Accent.TButton"),
+                              ("设为基准表", lambda: self.mark("base")),
+                              ("设为替换槽位", lambda: self.mark("slot")), ("近似预览", self.preview_candidate)])
             cols = ("file", "offset", "format", "score", "role")
-            self.cands = ttk.Treeview(f, columns=cols, show="headings", height=6)
-            for col, text, width in zip(cols, ("相机文件", "偏移", "格式", "平滑度/结构", "角色"), (300, 90, 260, 120, 80)):
+            self.cands = ttk.Treeview(f, columns=cols, show="headings", height=7, style="Flat.Treeview")
+            for col, text, width in zip(cols, ("相机文件", "偏移", "格式", "平滑度/结构", "角色"),
+                                        (260, 80, 230, 110, 70)):
                 self.cands.heading(col, text=text)
-                self.cands.column(col, width=width, anchor="w")
-            self.cands.grid(row=2, column=0, columnspan=4, sticky="ew", pady=4)
-            self.paths.configure(width=60)
+                self.cands.column(col, width=round(width * self.app.scale), anchor="w")
+            self.cands.pack(fill="both", expand=True, pady=(8, 0))
 
-            f = self._step(4, "3. 写入当前风格",
-                           "用「风格调色」页当前选中的风格（含微调），按「基准表」逐节点映射后写入「替换槽位」，文件长度不变。"
-                           "写入后同样插卡开机一次，再点「校验写入」。")
-            bar = self._buttons(f, 1, [("生成替换文件并写入 SD 卡", self.write_install), ("校验写入", lambda: self.verify("install"))])
-            ttk.Label(bar, text="色彩表输出空间").pack(side="left", padx=(12, 4))
-            ttk.Combobox(bar, textvariable=self.space, values=list(remap.SPACES), width=8, state="readonly").pack(side="left")
+        def _build_step3(self, f):
+            self._title(f, 3)
+            self._intro(f, "用「风格调色」页当前选中的风格（含微调），按「基准表」逐节点映射后写入「替换槽位」，"
+                           "文件长度不变。写入后插卡开机一次，再点「校验写入」。")
+            _, _ = self._buttons(f, [("生成替换文件并写入 SD 卡", self.write_install, "Accent.TButton"),
+                                     ("校验写入", lambda: self.verify("install"))])
+            mid = ttk.Frame(f, style="Panel.TFrame")
+            mid.pack(anchor="w", pady=(10, 0))
+            ttk.Label(mid, text="色彩表输出空间", style="Panel.TLabel").pack(side="left", padx=(0, 6))
+            ttk.Combobox(mid, textvariable=self.space, values=list(remap.SPACES), width=8, state="readonly").pack(side="left")
 
-            f = self._step(5, "4. 恢复原厂", "把已归档的原件写回相机，然后插卡开机一次，再点「校验恢复」。")
-            self._buttons(f, 1, [("生成恢复脚本并写入 SD 卡", self.write_restore), ("校验恢复", lambda: self.verify("restore"))])
+        def _build_step4(self, f):
+            self._title(f, 4)
+            self._intro(f, "把已归档的原件写回相机，然后插卡开机一次，再点「校验恢复」。")
+            self._buttons(f, [("生成恢复脚本并写入 SD 卡", self.write_restore, "Accent.TButton"),
+                              ("校验恢复", lambda: self.verify("restore"))])
 
-            f = self._step(6, "5. 收尾", "移走 SD 卡上的启动脚本（不会删除，移到 RC_OLD 文件夹），然后在工厂菜单把 Script 设回 Disable。")
-            self._buttons(f, 1, [("移走启动脚本", self.finish)])
+        def _build_step5(self, f):
+            self._title(f, 5)
+            self._intro(f, "移走 SD 卡上的启动脚本（不会删除，移到 RC_OLD 文件夹），然后在工厂菜单把 Script 设回 Disable。")
+            self._buttons(f, [("移走启动脚本", self.finish, "Accent.TButton")])
 
-            self.log = tk.Text(self.body, height=12, width=100, state="disabled")
-            self.log.grid(row=7, column=0, sticky="ew", pady=(6, 0))
+        def step_done(self, i):
+            d = self.data
+            return [False, bool(d.get("archive")), "base" in d and "slot" in d,
+                    bool(d.get("install_stage")), bool(d.get("restore_stage")), False][i]
 
+        def show_step(self, i):
+            self.current = i
+            self.steps[i].tkraise()
+            for k, b in self.nav_buttons.items():
+                mark = "✓ " if self.step_done(k) else "   "
+                b.configure(text=mark + STEP_TITLES[k], style="NavOn.TButton" if k == i else "Nav.TButton")
+
+        def refresh_nav(self):
+            self.show_step(self.current)
 
         def say(self, text):
             stamp = datetime.datetime.now().strftime("%H:%M:%S")
@@ -480,6 +693,7 @@ def run_gui():
         def save_state(self):
             self.data["card"] = self.card_path.get()
             (self.ws() / "state.json").write_text(json.dumps(self.data, indent=2, ensure_ascii=False), encoding="utf-8")
+            self.refresh_nav()
 
         def load_state(self):
             try:
@@ -491,11 +705,12 @@ def run_gui():
             self.paths.insert("1.0", "\n".join(self.data.get("paths", [])))
             self.show_candidates()
             self.entry_box.configure(values=self.entry_options())
+            self.refresh_nav()
 
         def need_card(self):
             path = self.card_path.get().strip()
             if not path or not Path(path).is_dir():
-                messagebox.showwarning(APP_NAME, "请先在「0. 准备」里选择 SD 卡根目录。")
+                messagebox.showwarning(APP_NAME, "请先在「0 准备」里选择 SD 卡根目录。")
                 return None
             return Path(path)
 
@@ -528,8 +743,8 @@ def run_gui():
                 self.entry_box.configure(values=self.entry_options())
                 self.say(f"固件中 DEVELOP.MOD：{'有' if found['develop_mod_present'] else '无'}；"
                          f"入口标记：{'有' if found['marker_present'] else '无'}；已知密钥字节：{'有' if found['key_present'] else '无'}")
-                for f in found["formats"][:10]:
-                    self.say(f"  文件名格式串：{f}")
+                for fmt in found["formats"][:10]:
+                    self.say(f"  文件名格式串：{fmt}")
                 if found["key_offsets"]:
                     self.say("  密钥位置：" + "、".join(f"0x{o:x}" for o in found["key_offsets"][:5]))
                 self.say("标记/密钥附近的文字（偏移为相对位置）：")
@@ -538,7 +753,7 @@ def run_gui():
                 (self.ws() / "factory-entry.json").write_text(json.dumps(found, indent=2, ensure_ascii=False), encoding="utf-8")
                 self.say(f"完整结果已保存到 {self.ws() / 'factory-entry.json'}")
                 if not names:
-                    self.say("没有找到 8 位数字.3 位数字 形式的入口文件名；请把上面的日志发给开发者分析。")
+                    self.say("没有找到 8 位数字.3 位数字 形式的入口文件名；可改用「批量写入 1000 个候选」。")
                     return
                 for n in found["names"][:10]:
                     near = "" if n["distance"] is None else f"（距工厂相关字符串 {n['distance']} 字节）"
@@ -617,7 +832,6 @@ def run_gui():
                 bad += verdict not in ok
                 self.say(f"  {e['target']}：{verdict}")
             return bad
-
 
         def paths_from_firmware(self):
             path = filedialog.askopenfilename(title="选择官方固件（例如 fwdc248b.bin）", filetypes=[("固件", "*.bin *.BIN"), ("所有文件", "*.*")])
@@ -758,14 +972,15 @@ def run_gui():
             img = photo.apply_lut(table, sample_image(480, 320))
             top = tk.Toplevel(self)
             top.title("候选色彩表近似预览（输入空间未知，仅供辨认）")
+            top.configure(bg=P["panel"])
             pic = ImageTk.PhotoImage(Image.fromarray(img))
-            label = ttk.Label(top, image=pic)
+            label = ttk.Label(top, image=pic, style="Panel.TLabel")
             label.image = pic
             label.pack(padx=8, pady=8)
 
         def write_install(self):
             if "base" not in self.data or "slot" not in self.data:
-                messagebox.showwarning(APP_NAME, "请先在「2. 定位色彩表」里设置基准表和替换槽位。")
+                messagebox.showwarning(APP_NAME, "请先在「2 定位色彩表」里设置基准表和替换槽位。")
                 return
             look_table = self.app.looks_page.table(65)
             label = self.app.looks_page.look_label()
@@ -826,33 +1041,57 @@ def run_gui():
             moved = card.finish(target)
             self.say(f"启动脚本已移到 {moved}。请在工厂菜单把 Script 设回 Disable。" if moved else "卡上没有启动脚本。")
 
-    class App(tk.Tk):
+    class App(BaseTk):
         def __init__(self):
             super().__init__()
             self.title(f"{APP_NAME}  ·  哈苏 / 富士风格 · GR 色彩表实验")
-            self.geometry("1280x820")
-            self.minsize(980, 640)
-            if os.name == "nt":
-                self.option_add("*Font", ("Microsoft YaHei UI", 9))
+            self.config = load_config()
+            try:
+                self.scale = min(2.0, max(1.0, self.winfo_fpixels("1i") / 96.0))
+            except tk.TclError:
+                self.scale = 1.0
+            self.geometry(f"{round(1280 * self.scale)}x{round(820 * self.scale)}")
+            self.minsize(round(960 * self.scale), round(640 * self.scale))
+            style = ttk.Style(self)
+            apply_theme(self, style, self.scale)
+            self.option_add("*TCombobox*Listbox.background", P["panel2"])
+            self.option_add("*TCombobox*Listbox.foreground", P["fg"])
+            self.option_add("*TCombobox*Listbox.selectBackground", P["accent"])
+            self.option_add("*TCombobox*Listbox.selectForeground", "#ffffff")
             self.tasks = queue.Queue()
             self.busy = False
             notebook = ttk.Notebook(self)
-            notebook.pack(fill="both", expand=True)
+            notebook.pack(fill="both", expand=True, padx=10, pady=(10, 0))
             self.looks_page = StylePage(self, notebook)
             self.camera_page = CameraPage(self, notebook)
-            help_page = ttk.Frame(notebook, padding=12)
-            text = tk.Text(help_page, wrap="word", height=30)
+            help_page = ttk.Frame(notebook, padding=14)
+            text = tk.Text(help_page, wrap="word", bg=P["panel"], fg=P["fg"], relief="flat", bd=0,
+                           highlightthickness=0, padx=10, pady=10)
             text.insert("1.0", HELP)
             text.configure(state="disabled")
             text.pack(fill="both", expand=True)
-            notebook.add(self.looks_page, text="  风格调色  ")
-            notebook.add(self.camera_page, text="  写入相机（实验）  ")
-            notebook.add(help_page, text="  说明  ")
-            self.statusbar = ttk.Label(self, anchor="w", padding=(8, 2))
+            notebook.add(self.looks_page, text="风格调色")
+            notebook.add(self.camera_page, text="写入相机（实验）")
+            notebook.add(help_page, text="说明")
+            self.statusbar = ttk.Label(self, anchor="w", style="Muted.TLabel", padding=(12, 5))
             self.statusbar.pack(fill="x")
-            self.status("就绪。选择左侧风格，打开照片预览效果。")
+            self.status("就绪 · 选择左侧风格，或把照片拖进窗口预览。")
             self.bind("<Escape>", lambda e: self.looks_page.cancel.set())
+            if HAS_DND:
+                try:
+                    self.drop_target_register(DND_FILES)
+                    self.dnd_bind("<<Drop>>", self._on_drop)
+                except Exception:
+                    pass
             self._poll_job = self.after(100, self._poll)
+
+        def _on_drop(self, event):
+            raw = event.data.strip()
+            path = raw[1:-1] if raw.startswith("{") and raw.endswith("}") else raw.split()[0]
+            if photo.is_supported(path):
+                self.looks_page.load_path(path)
+            else:
+                self.status("不支持的文件类型。")
 
         def destroy(self):
             self.after_cancel(self._poll_job)
@@ -902,7 +1141,6 @@ def run_gui():
             messagebox.showerror(APP_NAME, f"出错了：{value}")
 
     return App
-
 
 def log_error(text):
     try:

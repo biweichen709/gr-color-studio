@@ -15,6 +15,7 @@ def main():
             sys.executable, "-m", "PyInstaller", "--noconfirm", "--onefile", "--windowed",
             "--name", "GRColorStudio", "--icon", str(icon),
             "--collect-all", "rawpy",
+            "--collect-all", "tkinterdnd2",
             "--hidden-import", "PIL._tkinter_finder",
             "--distpath", str(ROOT / "dist"),
             "--workpath", str(build / "pyinstaller"),
