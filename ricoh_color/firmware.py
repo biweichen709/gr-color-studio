@@ -5,7 +5,9 @@ from .scan import find_strings
 PAYLOAD_START = 0x80
 FULL_PATH = re.compile(r"([A-Z]):\\([\x21-\x7e][\x20-\x7e]*)")
 PARTIAL_PATH = re.compile(r"(?:^|[^A-Za-z0-9])((?:Resource|Param|Table|Data|IQ|Isp)\\[\x21-\x7e][\x20-\x7e]*)", re.I)
-FORMAT_SPEC = re.compile(r"%[-0-9.]*[sdiuxX]")
+FORMAT_SPEC = re.compile(r"%[-0-9.]*(?:hh?|ll?|[jztL])?[diouxXeEfgGaAcspn]")
+# A real resource path: name-like segments, a basename of >=2 chars, optional short extension.
+VALID_PATH = re.compile(r"(?:[A-Za-z0-9_-]+\\)*[A-Za-z0-9_][A-Za-z0-9_-]+(?:\.[A-Za-z0-9]{1,4})?")
 SKIP_EXT = {
     ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".ttf", ".otf", ".fnt", ".wav", ".mp3", ".aac",
     ".mov", ".mp4", ".htm", ".html", ".css", ".js", ".ttl", ".log", ".mod", ".dpof",
@@ -91,7 +93,7 @@ def candidate_paths(payload):
             path = f"{drive}:\\{rest}"
             if FORMAT_SPEC.search(path):
                 patterns.add(path)
-            elif _extension(path) not in SKIP_EXT and "'" not in path and '"' not in path:
+            elif VALID_PATH.fullmatch(rest) and _extension(path) not in SKIP_EXT:
                 files[path] = _score(path)
         if not FULL_PATH.search(text):
             for m in PARTIAL_PATH.finditer(text):

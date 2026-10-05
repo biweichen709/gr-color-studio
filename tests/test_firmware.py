@@ -69,6 +69,16 @@ class Paths(unittest.TestCase):
         self.assertEqual(found["patterns"], ["A:\\Resource\\Param\\IC%02d.bin"])
         self.assertEqual(found["partial"], ["Resource\\Table\\gamma.tbl"])
 
+    def test_garbage_and_format_paths_are_rejected(self):
+        payload = b"\0".join([
+            b"A:\\Resource\\Param\\IC.bin", b"B:\\O", b"G:\\{", b"L:\\:B:J:Z:F",
+            b"F:\\KB%ld.DOM", b"N:\\:n", b"H:\\CamLogBK%03lu", b"E:\\MfgPrc01.bin",
+        ])
+        found = firmware.candidate_paths(payload)
+        paths = [f["path"] for f in found["files"]]
+        self.assertEqual(sorted(paths), ["A:\\Resource\\Param\\IC.bin", "E:\\MfgPrc01.bin"])
+        self.assertIn("F:\\KB%ld.DOM", found["patterns"])
+
 
 class Entry(unittest.TestCase):
     def test_entry_name_near_factory_strings_ranks_first(self):
